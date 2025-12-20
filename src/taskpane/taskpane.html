@@ -1,0 +1,136 @@
+<!-- Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT License. -->
+<!-- This file shows how to design a first-run page that provides a welcome screen to the user about the features of the add-in. -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Contoso Task Pane Add-in</title>
+
+    <!-- Office JavaScript API -->
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+
+    <!-- For more information on Fluent UI, visit https://developer.microsoft.com/fluentui#/. -->
+    <link rel="stylesheet" href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"/>
+
+    <!-- Template styles -->
+    <link href="taskpane.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body class="ms-font-m ms-welcome ms-Fabric">
+    <main class="ms-welcome__main">
+        <header class="ms-welcome__header">
+            <h1 class="main-title">报表生成器</h1>
+        </header>
+        
+        <section class="config-section">
+            <h2 class="section-title">配置主报表</h2>
+            <p class="section-hint">按顺序选择主报表的各个部分</p>
+            
+            <div class="config-steps">
+                <div class="config-step">
+                    <span class="step-label">1. 主报表区域：</span>
+                    <button id="btn-set-data-range" class="step-button">选择数据区域</button>
+                    <span id="data-range-info" class="step-value clickable" title="点击跳转到主报表">未配置</span>
+                </div>
+                
+                <div class="config-step">
+                    <span class="step-label">2. 标题行：</span>
+                    <button id="btn-set-header-row" class="step-button">选择标题行</button>
+                    <span id="header-row-info" class="step-value">未配置</span>
+                </div>
+                
+                <div class="config-step">
+                    <span class="step-label">3. S/N 列：</span>
+                    <button id="btn-set-sn" class="step-button">选择 S/N 列</button>
+                    <span id="sn-col-info" class="step-value">未配置</span>
+                </div>
+                
+                <div class="config-step">
+                    <span class="step-label">4. 金额列：</span>
+                    <button id="btn-set-amt" class="step-button">选择金额列</button>
+                    <span id="amt-col-info" class="step-value">未配置</span>
+                </div>
+            </div>
+            
+            <div class="config-actions">
+                <button id="btn-enable-filter" class="action-button">启用筛选</button>
+            </div>
+        </section>
+        
+        <section class="filter-section">
+            <h2 class="section-title">筛选面板</h2>
+            <div id="filter-panel" class="filter-panel">
+                <div class="filter-panel-hint">请先点击"启用筛选"加载字段</div>
+            </div>
+            <div class="filter-actions">
+                <button id="btn-reset-filter" class="icon-button" title="重置：清除所有筛选并跳转到主报表" disabled>
+                    <i class="ms-Icon ms-Icon--Refresh"></i>
+                </button>
+                <button id="btn-apply-filter" class="icon-button primary" title="应用筛选" disabled>
+                    <i class="ms-Icon ms-Icon--Filter"></i>
+                </button>
+                <button id="btn-generate" class="icon-button success" title="生成过滤报表" disabled>
+                    <i class="ms-Icon ms-Icon--DocumentSet"></i>
+                </button>
+                <button id="btn-save-filter" class="icon-button" title="保存筛选条件" disabled>
+                    <i class="ms-Icon ms-Icon--Save"></i>
+                </button>
+                <button id="btn-clear-filter" class="icon-button danger" title="清除当前筛选" disabled>
+                    <i class="ms-Icon ms-Icon--Cancel"></i>
+                </button>
+            </div>
+            <div id="current-filter-display" class="current-filter-display">
+                <div class="no-filters">当前未应用筛选条件</div>
+            </div>
+            <h3 class="subsection-title">已保存的筛选条件</h3>
+            <div id="filter-conditions-list" class="filter-conditions-list">
+                <div class="no-filters">暂无保存的筛选条件</div>
+            </div>
+        </section>
+        
+        <section class="reports-section">
+            <h2 class="section-title">已生成的报表</h2>
+            <div id="reports-table-container">
+                <table id="reports-table" class="reports-table">
+                    <thead>
+                        <tr>
+                            <th>报表名称</th>
+                            <th>生成时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reports-table-body">
+                        <tr>
+                            <td colspan="3" class="no-reports">暂无报表</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        
+        <div id="message-area" class="message-area"></div>
+        <div id="debug-log" class="debug-log"></div>
+    </main>
+    
+    <!-- 确认对话框 -->
+    <div id="confirm-dialog" class="confirm-dialog-overlay">
+        <div class="confirm-dialog">
+            <div class="confirm-dialog-header">
+                <h3 class="confirm-dialog-title">确认删除</h3>
+            </div>
+            <div class="confirm-dialog-body">
+                <p id="confirm-dialog-message">确定要删除此报表吗？此操作不可恢复。</p>
+            </div>
+            <div class="confirm-dialog-footer">
+                <button id="confirm-dialog-cancel" class="confirm-button cancel-button">取消</button>
+                <button id="confirm-dialog-ok" class="confirm-button ok-button">确定</button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
