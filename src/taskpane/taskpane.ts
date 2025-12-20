@@ -109,6 +109,43 @@ function showMessage(message: string, isError: boolean = false): void {
   console.log(message);
 }
 
+// 显示进度条
+function showProgress(title: string, message: string): void {
+  const overlay = document.getElementById("progress-overlay");
+  const titleEl = document.getElementById("progress-title");
+  const messageEl = document.getElementById("progress-message");
+  const barEl = document.getElementById("progress-bar");
+  const detailEl = document.getElementById("progress-detail");
+  
+  if (overlay && titleEl && messageEl && barEl && detailEl) {
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    barEl.style.width = "0%";
+    detailEl.textContent = "";
+    overlay.classList.add("show");
+  }
+}
+
+// 更新进度条
+function updateProgress(current: number, total: number, detail?: string): void {
+  const barEl = document.getElementById("progress-bar");
+  const detailEl = document.getElementById("progress-detail");
+  
+  if (barEl && detailEl) {
+    const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+    barEl.style.width = `${percent}%`;
+    detailEl.textContent = detail || `${current} / ${total}`;
+  }
+}
+
+// 隐藏进度条
+function hideProgress(): void {
+  const overlay = document.getElementById("progress-overlay");
+  if (overlay) {
+    overlay.classList.remove("show");
+  }
+}
+
 // 追加调试日志到界面
 function appendDebugLog(message: string): void {
   const debugLog = document.getElementById("debug-log");
@@ -421,6 +458,313 @@ async function setColumnConfig(columnName: string, displayName: string): Promise
   } catch (error) {
     console.error("设置列配置时出错:", error);
     showMessage(`设置${displayName}失败: ${error.message}`, true);
+  }
+}
+
+// 设置SN列（带合并单元格检查）
+// 合并单元格信息接口
+interface MergeCellInfo {
+  address: string;      // 合并区域地址，如 "A5:A6"
+  startRow: number;     // 起始行（0-based）
+  endRow: number;       // 结束行（0-based）
+  columnIndex: number;  // 列索引
+}
+
+async function setSnColumnWithMergeCheck(): Promise<void> {
+  try {
+    await Excel.run(async (context) => {
+      const sheet = context.workbook.worksheets.getActiveWorksheet();
+      sheet.load("name");
+      
+      // 获取当前选中的范围
+      const selection = context.workbook.getSelectedRange();
+      selection.load("address, columnIndex");
+      
+      await context.sync();
+      
+      const columnIndex = selection.columnIndex;
+      const columnNameStr = getColumnName(columnIndex);
+      
+      // 获取该列的使用范围
+      const usedRange = sheet.getUsedRange();
+      usedRange.load("rowCount, rowIndex, columnCount, address");
+      await context.sync();
+      
+      const startRow = usedRange.rowIndex;
+      const rowCount = usedRange.rowCount;
+      const totalColumns = usedRange.columnCount;
+      
+      // 使用最直接的方法：通过值检测和手动比较来识别合并单元格
+      // 合并单元格的特征：主单元格有值，其下方的从属单元格值为 null
+      const mergedCellInfos: MergeCellInfo[] = [];
+      
+      console.log(`开始检查列 ${columnNameStr} 的合并单元格，范围: 行${startRow+1}到${startRow+rowCount}`);
+      
+      // 读取整列的值和格式
+      const columnRange = sheet.getRangeByIndexes(startRow, columnIndex, rowCount, 1);
+      columnRange.load("values, address");
+      await context.sync();
+      
+      const values = columnRange.values;
+      console.log(`读取到 ${values.length} 个单元格值`);
+      
+      // 逐个单元格检查合并状态
+      let i = 0;
+      while (i < rowCount) {
+        const cellRowIndex = startRow + i;
+        const cell = sheet.getCell(cellRowIndex, columnIndex);
+        
+        // 获取实际的合并区域 - 使用 getEntireColumn + intersection 方法
+        // 或者直接获取该单元格的扩展区域
+        const extendedRange = cell.getExtendedRange(Excel.KeyboardDirection.down);
+        extendedRange.load("rowCount, address, rowIndex");
+        
+        // 同时加载当前单元格信息
+        cell.load("address, rowIndex, text");
+        
+        await context.sync();
+        
+        // 检查扩展范围是否跨越多行（可能是合并单元格）
+        // 但 getExtendedRange 可能返回的是连续非空区域，不一定是合并单元格
+        
+        // 更可靠的方法：直接用 API 获取合并状态
+        // 尝试获取单元格的实际合并范围
+        let mergeRowCount = 1;
+        let mergeAddress = cell.address;
+        
+        try {
+          // 方法1: 使用 getMergedAreasOrNullObject
+          const mergedAreas = cell.getMergedAreasOrNullObject();
+          mergedAreas.load("isNullObject");
+          await context.sync();
+          
+          if (!mergedAreas.isNullObject) {
+            mergedAreas.load("address, areas");
+            await context.sync();
+            
+            if (mergedAreas.areas && mergedAreas.areas.items) {
+              const areas = mergedAreas.areas;
+              areas.load("items");
+              await context.sync();
+              
+              for (let j = 0; j < areas.items.length; j++) {
+                const area = areas.items[j];
+                area.load("rowCount, address, rowIndex, columnIndex");
+                await context.sync();
+                
+                if (area.rowCount > 1 && area.columnIndex === columnIndex) {
+                  mergeRowCount = area.rowCount;
+                  mergeAddress = area.address;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.log(`检查单元格 ${cell.address} 时出错:`, e);
+        }
+        
+        // 方法2: 如果方法1没有检测到，检查下方单元格是否为空且属于同一"合并组"
+        if (mergeRowCount === 1 && i < rowCount - 1) {
+          // 检查下一个单元格的值是否为 null（合并单元格的从属部分值为 null）
+          let consecutiveNulls = 0;
+          for (let k = i + 1; k < rowCount; k++) {
+            const nextValue = values[k][0];
+            if (nextValue === null) {
+              consecutiveNulls++;
+            } else {
+              break;
+            }
+          }
+          
+          if (consecutiveNulls > 0) {
+            // 可能是合并单元格，需要进一步验证
+            // 尝试选择这个范围并检查
+            const potentialMergeRange = sheet.getRangeByIndexes(cellRowIndex, columnIndex, consecutiveNulls + 1, 1);
+            potentialMergeRange.load("address, rowCount");
+            await context.sync();
+            
+            // 检查这个范围是否真的是合并的
+            const mergeCheck = potentialMergeRange.getMergedAreasOrNullObject();
+            mergeCheck.load("isNullObject, address, areaCount");
+            await context.sync();
+            
+            if (!mergeCheck.isNullObject && mergeCheck.areaCount > 0) {
+              const checkAddress = mergeCheck.address;
+              if (checkAddress && checkAddress.includes(":")) {
+                console.log(`通过空值检测发现可能的合并区域: ${checkAddress}`);
+                mergeRowCount = consecutiveNulls + 1;
+                mergeAddress = potentialMergeRange.address;
+              }
+            } else if (consecutiveNulls > 0) {
+              // 即使 API 没有检测到，如果有连续的 null 值，也可能是合并单元格
+              // 我们保守地将其视为合并单元格
+              console.log(`发现连续 ${consecutiveNulls + 1} 个可能合并的单元格（基于空值）: 行${cellRowIndex + 1}`);
+              mergeRowCount = consecutiveNulls + 1;
+              mergeAddress = potentialMergeRange.address;
+            }
+          }
+        }
+        
+        if (mergeRowCount > 1) {
+          console.log(`确认合并单元格: ${mergeAddress}, 跨${mergeRowCount}行`);
+          mergedCellInfos.push({
+            address: mergeAddress,
+            startRow: cellRowIndex,
+            endRow: cellRowIndex + mergeRowCount - 1,
+            columnIndex: columnIndex
+          });
+          i += mergeRowCount;
+        } else {
+          i++;
+        }
+      }
+      
+      console.log(`最终检测到 ${mergedCellInfos.length} 个合并单元格区域`);
+      
+      // 如果存在合并单元格，提示用户
+      if (mergedCellInfos.length > 0) {
+        showMessage(`检测到 ${mergedCellInfos.length} 个合并单元格区域`, false);
+        
+        // 询问是否标注合并单元格
+        const confirmHighlight = await showConfirmDialog(
+          `在第 ${columnIndex + 1} 列 (${columnNameStr}) 中检测到 ${mergedCellInfos.length} 个合并单元格区域。\n\n是否将这些合并单元格用黄色背景标注？`
+        );
+        
+        if (confirmHighlight) {
+          // 用黄色标注合并单元格
+          for (const info of mergedCellInfos) {
+            const mergeRange = sheet.getRange(info.address);
+            mergeRange.format.fill.color = "#FFFF00";
+          }
+          await context.sync();
+          showMessage(`已标注 ${mergedCellInfos.length} 个合并单元格区域`);
+        }
+        
+        // 询问是否合并行数据
+        const confirmMerge = await showConfirmDialog(
+          `是否需要拆分合并单元格并合并行数据？\n\n操作说明：\n• 取消单元格合并\n• 相同内容保留其一\n• 不同内容换行拼接到第一行\n• 删除多余行\n• 用浅灰色背景标注处理过的行`
+        );
+        
+        if (confirmMerge) {
+          // 显示进度条
+          showProgress("处理合并单元格", `正在处理 ${mergedCellInfos.length} 个合并区域，请耐心等待...`);
+          
+          // 从后往前处理，避免删除行后索引错乱
+          const sortedInfos = mergedCellInfos.sort((a, b) => b.startRow - a.startRow);
+          let deletedRows = 0;
+          const processedFirstRows: number[] = [];
+          const totalInfos = sortedInfos.length;
+          
+          for (let idx = 0; idx < sortedInfos.length; idx++) {
+            const info = sortedInfos[idx];
+            const rowsToMerge = info.endRow - info.startRow + 1;
+            if (rowsToMerge < 2) continue;
+            
+            // 更新进度条
+            updateProgress(idx + 1, totalInfos, `处理第 ${idx + 1}/${totalInfos} 个区域: ${info.address}`);
+            
+            console.log(`处理合并区域: ${info.address}, 行数: ${rowsToMerge}`);
+            
+            // 1. 先取消合并单元格
+            const mergeRange = sheet.getRange(info.address);
+            mergeRange.unmerge();
+            await context.sync();
+            
+            // 2. 获取涉及的所有行的数据
+            const firstRowIndex = info.startRow;
+            const firstRowRange = sheet.getRangeByIndexes(firstRowIndex, 0, 1, totalColumns);
+            firstRowRange.load("values");
+            await context.sync();
+            
+            const firstRowValues = firstRowRange.values[0].slice();
+            
+            // 处理合并区域中的其他行（从第2行开始）
+            for (let rowOffset = 1; rowOffset < rowsToMerge; rowOffset++) {
+              const currentRowIndex = firstRowIndex + rowOffset;
+              const currentRowRange = sheet.getRangeByIndexes(currentRowIndex, 0, 1, totalColumns);
+              currentRowRange.load("values");
+              await context.sync();
+              
+              const currentRowValues = currentRowRange.values[0];
+              
+              // 3. 比较并合并每列的内容
+              for (let col = 0; col < totalColumns; col++) {
+                const firstVal = String(firstRowValues[col] || "").trim();
+                const currentVal = String(currentRowValues[col] || "").trim();
+                
+                if (currentVal && currentVal !== firstVal) {
+                  if (firstVal) {
+                    firstRowValues[col] = firstVal + "\n" + currentVal;
+                  } else {
+                    firstRowValues[col] = currentVal;
+                  }
+                }
+              }
+            }
+            
+            // 4. 将合并后的内容写入第一行
+            firstRowRange.values = [firstRowValues];
+            firstRowRange.format.wrapText = true;
+            // 用浅灰色标注处理过的行
+            firstRowRange.format.fill.color = "#F5F5F5"; // 浅灰色
+            await context.sync();
+            
+            processedFirstRows.push(firstRowIndex);
+            
+            // 5. 删除多余的行（从后往前删除）
+            for (let rowOffset = rowsToMerge - 1; rowOffset > 0; rowOffset--) {
+              const rowToDelete = sheet.getRangeByIndexes(firstRowIndex + rowOffset, 0, 1, totalColumns);
+              rowToDelete.delete(Excel.DeleteShiftDirection.up);
+              deletedRows++;
+            }
+            await context.sync();
+          }
+          
+          // 隐藏进度条
+          hideProgress();
+          
+          showMessage(`已拆分并合并 ${mergedCellInfos.length} 个区域的行数据，删除了 ${deletedRows} 行`);
+        }
+      }
+      
+      // 继续设置SN列
+      const namedItems = context.workbook.names;
+      
+      try {
+        const existingItem = namedItems.getItem(CFG_SN_COL_NAME);
+        existingItem.delete();
+        await context.sync();
+      } catch (error) {
+        // 如果不存在，忽略错误
+      }
+      
+      const columnAddress = `='${sheet.name}'!$${columnNameStr}:$${columnNameStr}`;
+      namedItems.add(CFG_SN_COL_NAME, columnAddress);
+      
+      await context.sync();
+      
+      if (!currentMainReportConfig) {
+        currentMainReportConfig = {
+          dataRange: "",
+          headerRow: 0,
+          snColumn: columnIndex,
+          amtColumn: 0,
+          sheetName: sheet.name
+        };
+      } else {
+        currentMainReportConfig.snColumn = columnIndex;
+        currentMainReportConfig.sheetName = sheet.name;
+      }
+      
+      const mergeInfo = mergedCellInfos.length > 0 ? ` (已处理 ${mergedCellInfos.length} 个合并区域)` : "";
+      showMessage(`成功设置 S/N 列为第 ${columnIndex + 1} 列 (${columnNameStr})${mergeInfo}`);
+      
+      updateMainReportConfigDisplay();
+    });
+  } catch (error) {
+    console.error("设置SN列时出错:", error);
+    showMessage(`设置 S/N 列失败: ${error.message}`, true);
   }
 }
 
@@ -2466,7 +2810,7 @@ Office.onReady((info) => {
     });
     
     document.getElementById("btn-set-sn")?.addEventListener("click", () => {
-      setColumnConfig(CFG_SN_COL_NAME, "S/N 列");
+      setSnColumnWithMergeCheck();
     });
     
     document.getElementById("btn-set-amt")?.addEventListener("click", () => {
@@ -2514,3 +2858,4 @@ Office.onReady((info) => {
     console.log("Excel Add-in 初始化完成");
   }
 });
+
