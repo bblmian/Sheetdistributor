@@ -1,711 +1,354 @@
 /* 
  * Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
  * See LICENSE in the project root for license information.
+ * 
+ * Office UI Fabric Core 风格样式
  */
 
- html,
- body {
-     width: 100%;
-     height: 100%;
-     margin: 0;
-     padding: 0;
-     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-     font-size: 14px;
- }
- 
- ul {
-     margin: 0;
-     padding: 0;
- }
-
- .ms-welcome__main {
-    display: flex;
-    flex-direction: column;
-    padding: 12px;
-    max-width: 100%;
-    box-sizing: border-box;
- }
-
- .ms-welcome__header {
-    padding: 8px 12px;
-    background: #ffffff;
-    border-bottom: 2px solid #0078d4;
-    margin-bottom: 12px;
-    text-align: left;
- }
-
- .main-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #0078d4;
-    margin: 0;
-    letter-spacing: 0.5px;
- }
-
- .section-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: #323130;
-    margin: 0 0 8px 0;
-    padding-bottom: 6px;
-    border-bottom: 1px solid #e1dfdd;
- }
-
- .section-hint {
-    font-size: 11px;
-    color: #605e5c;
-    margin: 0 0 10px 0;
- }
-
- .config-section,
- .filter-section,
- .generate-section,
- .reports-section {
-    background: #ffffff;
-    border: 1px solid #e1dfdd;
-    border-radius: 4px;
-    padding: 12px;
-    margin-bottom: 12px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
- }
-
- .button-group {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
- }
-
- .config-button {
-    flex: 1;
-    min-width: 120px;
-    padding: 8px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    color: #323130;
-    background-color: #f3f2f1;
-    border: 1px solid #c8c6c4;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all 0.2s ease;
- }
-
- .config-button:hover {
-    background-color: #edebe9;
-    border-color: #8a8886;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
- }
-
- .config-button:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
- }
-
- .generate-button {
+/* ========================================
+   全局基础样式
+   ======================================== */
+html, body {
     width: 100%;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #ffffff;
-    background: #0078d4;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0, 120, 212, 0.3);
- }
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: #f3f2f1;
+}
 
- .generate-button:hover {
-    background: #106ebe;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 120, 212, 0.4);
- }
+body {
+    color: #323130;
+}
 
- .generate-button:active {
-    background: #005a9e;
-    transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 120, 212, 0.3);
- }
+.ms-Grid {
+    padding: 0;
+}
 
- .button-label {
-    display: block;
- }
-
- .config-display {
-    background: #faf9f8;
-    border: 1px solid #e1dfdd;
-    border-radius: 3px;
-    padding: 10px;
-    margin-top: 10px;
- }
-
- .config-steps {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+/* ========================================
+   Header 样式
+   ======================================== */
+.app-header {
+    background: linear-gradient(135deg, #217346 0%, #185c37 100%);
+    padding: 12px 16px;
     margin-bottom: 12px;
- }
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.14);
+}
 
- .config-step {
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.header-icon {
+    font-size: 20px;
+    color: #ffffff;
+}
+
+.header-title {
+    color: #ffffff;
+    letter-spacing: 0.5px;
+}
+
+/* ========================================
+   Section Card 样式
+   ======================================== */
+.section-card {
+    background: #ffffff;
+    border: 1px solid #edebe9;
+    border-radius: 4px;
+    padding: 16px;
+    margin: 0 12px 12px 12px;
+    box-shadow: 0 1.6px 3.6px 0 rgba(0, 0, 0, 0.132), 
+                0 0.3px 0.9px 0 rgba(0, 0, 0, 0.108);
+}
+
+.section-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
- }
-
- .step-label {
-    font-weight: 600;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #edebe9;
     color: #323130;
-    min-width: 100px;
- }
+}
 
- .step-button {
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 500;
-    color: #323130;
-    background-color: #f3f2f1;
-    border: 1px solid #c8c6c4;
-    border-radius: 3px;
-    cursor: pointer;
+.section-icon {
+    font-size: 16px;
+    color: #217346;
+}
+
+.section-hint {
+    color: #605e5c;
+    margin: 0 0 12px 0;
+    padding-left: 24px;
+}
+
+.subsection-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 0 8px 0;
+    margin-top: 12px;
+    border-top: 1px solid #edebe9;
+    color: #605e5c;
+}
+
+.subsection-header .ms-Icon {
+    font-size: 14px;
+    color: #217346;
+}
+
+/* ========================================
+   配置步骤样式
+   ======================================== */
+.config-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.config-step {
+    align-items: center;
+    padding: 8px 12px;
+    background: #faf9f8;
+    border-radius: 4px;
+    border: 1px solid #edebe9;
     transition: all 0.2s ease;
- }
+}
 
- .step-button:hover {
-    background-color: #edebe9;
-    border-color: #8a8886;
- }
+.config-step:hover {
+    background: #f3f2f1;
+    border-color: #c8c6c4;
+}
 
- .step-value {
-    color: #0078d4;
+.step-label-col {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.step-number {
+    color: #217346;
+    min-width: 16px;
+}
+
+.step-value {
+    color: #217346;
     font-weight: 500;
-    font-size: 11px;
- }
+}
 
- .step-value.not-configured {
+.step-value.not-configured {
     color: #a19f9d;
     font-style: italic;
- }
+}
 
- .step-value.clickable {
+.step-value.clickable {
     cursor: pointer;
     text-decoration: underline;
     text-decoration-style: dotted;
- }
+}
 
- .step-value.clickable:hover {
-    color: #106ebe;
+.step-value.clickable:hover {
+    color: #185c37;
     text-decoration-style: solid;
- }
+}
 
- .config-actions {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #e1dfdd;
- }
-
- .action-button {
-    padding: 8px 16px;
+/* ========================================
+   Fabric 按钮样式覆盖
+   ======================================== */
+.ms-Button {
+    min-width: auto;
+    padding: 6px 12px;
+    border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
-    color: #ffffff;
-    background-color: #0078d4;
-    border: none;
-    border-radius: 3px;
     cursor: pointer;
     transition: all 0.2s ease;
- }
-
- .action-button:hover {
-    background-color: #106ebe;
- }
-
- .action-button:disabled {
-    background-color: #c8c6c4;
-    cursor: not-allowed;
- }
-
- /* 筛选条件区域 */
- .current-filter-display {
-    background: #faf9f8;
-    border: 1px solid #e1dfdd;
-    border-radius: 3px;
-    padding: 10px;
-    margin-bottom: 12px;
-    min-height: 40px;
- }
-
- .current-filter-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: #323130;
-    margin-bottom: 8px;
- }
-
- .current-filter-items {
-    display: flex;
-    flex-direction: column;
+    display: inline-flex;
+    align-items: center;
     gap: 6px;
- }
-
- .current-filter-item {
-    display: flex;
-    align-items: center;
-    font-size: 11px;
+    border: 1px solid #8a8886;
+    background-color: #ffffff;
     color: #323130;
-    padding: 4px 8px;
-    background: #ffffff;
-    border-radius: 2px;
-    border: 1px solid #edebe9;
- }
+}
 
- .filter-field {
-    font-weight: 600;
-    color: #0078d4;
- }
+.ms-Button:hover {
+    background-color: #f3f2f1;
+    border-color: #323130;
+}
 
- .filter-separator {
-    margin: 0 4px;
-    color: #605e5c;
- }
+.ms-Button:active {
+    background-color: #edebe9;
+}
 
- .filter-value {
-    color: #323130;
- }
-
- .filter-conditions-list {
-    min-height: 40px;
- }
-
- .no-filters {
-    font-size: 11px;
+.ms-Button:disabled {
+    background-color: #f3f2f1;
     color: #a19f9d;
-    font-style: italic;
-    text-align: center;
-    padding: 10px;
- }
-
- .filter-condition-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 5px 8px;
-    margin-bottom: 4px;
-    background: #faf9f8;
-    border: 1px solid #e1dfdd;
-    border-radius: 3px;
-    font-size: 11px;
-    transition: all 0.2s ease;
- }
-
- .filter-condition-item:hover {
-    background: #f3f2f1;
     border-color: #c8c6c4;
- }
+    cursor: not-allowed;
+}
 
- .filter-condition-info {
-    flex: 1;
-    color: #323130;
-    overflow: hidden;
- }
-
- .filter-name-display {
-    font-weight: 500;
-    color: #0078d4;
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: pointer;
- }
-
- .filter-name-display:hover {
-    text-decoration: underline;
- }
-
- .filter-name-edit-container {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-bottom: 2px;
- }
-
- .filter-name-input {
-    flex: 1;
-    padding: 2px 5px;
-    font-size: 11px;
-    border: 1px solid #0078d4;
-    border-radius: 3px;
-    outline: none;
-    min-width: 60px;
- }
-
- .filter-name-input:focus {
-    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
- }
-
- .filter-condition-time {
-    font-size: 10px;
-    color: #605e5c;
- }
-
- .filter-condition-actions {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
- }
-
- .reports-table-container {
-    overflow-x: auto;
- }
-
- .reports-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 11px;
- }
-
- .reports-table thead {
-    background: #f3f2f1;
- }
-
- .reports-table th {
-    padding: 6px 8px;
-    text-align: left;
-    font-weight: 600;
-    color: #323130;
-    border-bottom: 1px solid #e1dfdd;
-    font-size: 11px;
- }
-
- .reports-table td {
-    padding: 6px 8px;
-    border-bottom: 1px solid #f3f2f1;
-    color: #323130;
- }
-
- .reports-table tbody tr:hover {
-    background-color: #faf9f8;
- }
-
- .report-link {
-    color: #0078d4;
-    text-decoration: none;
-    font-weight: 500;
-    cursor: pointer;
-    transition: color 0.2s ease;
-    font-size: 11px;
- }
-
- .report-link:hover {
-    color: #106ebe;
-    text-decoration: underline;
- }
-
- /* 小图标按钮（用于表格中的操作） */
- .icon-button-small {
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    font-size: 12px;
-    color: #323130;
-    background-color: #f3f2f1;
-    border: 1px solid #c8c6c4;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
- }
-
- .icon-button-small:hover {
-    background-color: #edebe9;
-    border-color: #8a8886;
- }
-
- .icon-button-small.danger {
-    color: #d13438;
-    border-color: #d13438;
- }
-
- .icon-button-small.danger:hover {
-    background-color: #d13438;
-    color: #fff;
- }
-
- /* 主报表行样式 */
- .main-report-row {
-    background-color: #f0f6ff;
- }
-
- .main-report-row:hover {
-    background-color: #e1efff !important;
- }
-
- .main-report-link {
-    color: #0078d4;
-    font-weight: 600;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
- }
-
- .main-report-link:hover {
-    text-decoration: underline;
- }
-
- .main-report-badge {
-    font-size: 9px;
-    color: #0078d4;
-    background: #deecf9;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: 500;
- }
-
- /* 报表名称显示和编辑 */
- .report-name-display {
-    color: #0078d4;
-    cursor: pointer;
-    font-weight: 500;
- }
-
- .report-name-display:hover {
-    text-decoration: underline;
- }
-
- .report-name-edit-container {
-    display: flex;
-    align-items: center;
-    gap: 4px;
- }
-
- .report-name-input {
-    flex: 1;
-    padding: 3px 6px;
-    font-size: 11px;
-    border: 1px solid #0078d4;
-    border-radius: 3px;
-    outline: none;
-    min-width: 80px;
- }
-
- .report-name-input:focus {
-    box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
- }
-
- .edit-hint-icon {
-    color: #0078d4;
-    font-size: 12px;
-    opacity: 0.7;
- }
-
- .no-reports {
-    text-align: center;
-    color: #a19f9d;
-    font-style: italic;
-    padding: 20px !important;
- }
-
- .message-area {
-    margin-top: 20px;
-    padding: 12px 15px;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 500;
-    min-height: 20px;
- }
-
- .message-area.success {
-    background-color: #dff6dd;
-    color: #107c10;
-    border: 1px solid #92c5f7;
- }
-
- .message-area.error {
-    background-color: #fde7e9;
-    color: #d13438;
-    border: 1px solid #f4c2c2;
- }
-
- .debug-log {
-    margin-top: 15px;
-    padding: 12px;
-    background-color: #f5f5f5;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    max-height: 250px;
-    overflow-y: auto;
-    font-family: "Consolas", "Monaco", monospace;
-    font-size: 12px;
-    color: #333;
-    display: none;
- }
-
- .debug-log.show {
-    display: block;
- }
-
- .debug-log div {
-    margin-bottom: 3px;
-    line-height: 1.4;
- }
-
- /* 确认对话框样式 */
- .confirm-dialog-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    align-items: center;
-    justify-content: center;
- }
-
- .confirm-dialog-overlay.show {
-    display: flex;
- }
-
- .confirm-dialog {
-    background: #ffffff;
-    border-radius: 6px;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-    min-width: 400px;
-    max-width: 90%;
-    overflow: hidden;
- }
-
- .confirm-dialog-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid #e1dfdd;
-    background: #faf9f8;
- }
-
- .confirm-dialog-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: #323130;
-    margin: 0;
- }
-
- .confirm-dialog-body {
-    padding: 24px;
- }
-
- .confirm-dialog-body p {
-    font-size: 14px;
-    color: #323130;
-    margin: 0;
-    line-height: 1.5;
- }
-
- .confirm-dialog-footer {
-    padding: 16px 24px;
-    border-top: 1px solid #e1dfdd;
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    background: #faf9f8;
- }
-
- .confirm-button {
-    padding: 8px 20px;
-    font-size: 14px;
-    font-weight: 500;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
- }
-
- .confirm-button.cancel-button {
-    background-color: #f3f2f1;
-    color: #323130;
-    border: 1px solid #c8c6c4;
- }
-
- .confirm-button.cancel-button:hover {
-    background-color: #edebe9;
-    border-color: #8a8886;
- }
-
- .confirm-button.ok-button {
-    background-color: #0078d4;
+.ms-Button--primary {
+    background-color: #217346;
+    border-color: #217346;
     color: #ffffff;
- }
+}
 
- .confirm-button.ok-button:hover {
-    background-color: #106ebe;
- }
+.ms-Button--primary:hover {
+    background-color: #185c37;
+    border-color: #185c37;
+}
 
-/* 筛选面板样式 */
+.ms-Button--primary:active {
+    background-color: #0f4025;
+}
+
+.ms-Button--primary:disabled {
+    background-color: #c8c6c4;
+    border-color: #c8c6c4;
+}
+
+.ms-Button--small {
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+.ms-Button--icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+}
+
+.ms-Button--icon .ms-Button-icon {
+    margin: 0;
+}
+
+.ms-Button-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ms-Button-icon .ms-Icon {
+    font-size: 14px;
+}
+
+.ms-Button-label {
+    font-weight: 500;
+}
+
+/* 成功按钮样式 */
+.btn-success {
+    background-color: #107c10;
+    border-color: #107c10;
+    color: #ffffff;
+}
+
+.btn-success:hover:not(:disabled) {
+    background-color: #0b5c0b;
+    border-color: #0b5c0b;
+}
+
+/* 危险按钮样式 */
+.btn-danger {
+    background-color: #ffffff;
+    border-color: #d13438;
+    color: #d13438;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #d13438;
+    color: #ffffff;
+}
+
+/* ========================================
+   配置操作区域
+   ======================================== */
+.config-actions {
+    padding-top: 12px;
+    border-top: 1px solid #edebe9;
+    text-align: center;
+}
+
+.config-actions .ms-Button {
+    min-width: 140px;
+}
+
+/* ========================================
+   筛选面板样式
+   ======================================== */
 .filter-panel {
     background: #faf9f8;
-    border: 1px solid #e1dfdd;
-    border-radius: 3px;
-    padding: 10px;
-    margin-bottom: 10px;
+    border: 1px solid #edebe9;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 12px;
+    min-height: 60px;
 }
 
 .filter-panel-hint {
-    font-size: 11px;
-    color: #a19f9d;
-    font-style: italic;
+    color: #605e5c;
     text-align: center;
-    padding: 15px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.filter-panel-hint .ms-Icon {
+    color: #217346;
 }
 
 /* 字段标签容器 */
 .filter-tags-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
 /* 字段标签 */
 .filter-tag {
     display: inline-flex;
     align-items: center;
-    padding: 5px 10px;
-    font-size: 11px;
+    padding: 6px 12px;
+    font-size: 12px;
     background: #ffffff;
     border: 1px solid #c8c6c4;
-    border-radius: 15px;
+    border-radius: 16px;
     cursor: pointer;
     transition: all 0.2s ease;
     user-select: none;
 }
 
 .filter-tag:hover {
-    border-color: #0078d4;
+    border-color: #217346;
     background: #f3f2f1;
 }
 
 .filter-tag.active {
-    background: #0078d4;
+    background: #217346;
     color: #ffffff;
-    border-color: #0078d4;
+    border-color: #217346;
 }
 
 .filter-tag.filtered {
-    background: #deecf9;
-    border-color: #0078d4;
-    color: #0078d4;
+    background: #e6f2eb;
+    border-color: #217346;
+    color: #217346;
 }
 
 .filter-tag.filtered.active {
-    background: #0078d4;
+    background: #217346;
     color: #ffffff;
 }
 
 .filter-tag-name {
-    margin-right: 4px;
+    margin-right: 6px;
 }
 
 .filter-tag-count {
@@ -717,11 +360,12 @@
 .filter-dropdown {
     display: none;
     background: #ffffff;
-    border: 1px solid #e1dfdd;
+    border: 1px solid #edebe9;
     border-radius: 4px;
-    padding: 10px;
-    margin-top: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 12px;
+    margin-top: 10px;
+    box-shadow: 0 3.2px 7.2px 0 rgba(0, 0, 0, 0.132),
+                0 0.6px 1.8px 0 rgba(0, 0, 0, 0.108);
 }
 
 .filter-dropdown.show {
@@ -732,24 +376,24 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
     border-bottom: 1px solid #edebe9;
 }
 
 .filter-dropdown-title {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     color: #323130;
 }
 
 .filter-dropdown-close {
-    padding: 2px 8px;
-    font-size: 10px;
+    padding: 4px 10px;
+    font-size: 11px;
     color: #605e5c;
     background: transparent;
     border: 1px solid #c8c6c4;
-    border-radius: 3px;
+    border-radius: 4px;
     cursor: pointer;
 }
 
@@ -759,42 +403,60 @@
 
 .filter-field-search {
     width: 100%;
-    padding: 6px 10px;
-    font-size: 11px;
+    padding: 8px 12px;
+    font-size: 12px;
     border: 1px solid #c8c6c4;
-    border-radius: 3px;
-    margin-bottom: 6px;
+    border-radius: 4px;
+    margin-bottom: 8px;
     box-sizing: border-box;
 }
 
 .filter-field-search:focus {
     outline: none;
-    border-color: #0078d4;
+    border-color: #217346;
+    box-shadow: 0 0 0 1px #217346;
 }
 
 .filter-options-container {
-    max-height: 150px;
+    max-height: 160px;
     overflow-y: auto;
     border: 1px solid #edebe9;
-    border-radius: 3px;
+    border-radius: 4px;
     background: #ffffff;
 }
 
 .filter-option {
     display: flex;
     align-items: center;
-    padding: 5px 8px;
-    font-size: 11px;
+    padding: 8px 12px;
+    font-size: 12px;
     cursor: pointer;
-    transition: background-color 0.15s ease;
+    transition: all 0.15s ease;
+    border-bottom: 1px solid #faf9f8;
+    border-left: 3px solid transparent;
+    user-select: none;
+}
+
+.filter-option:last-child {
+    border-bottom: none;
 }
 
 .filter-option:hover {
     background-color: #f3f2f1;
+    border-left-color: #c8c6c4;
+}
+
+.filter-option:active {
+    background-color: #edebe9;
 }
 
 .filter-option.selected {
-    background-color: #deecf9;
+    background-color: #e6f2eb;
+    border-left-color: #217346;
+}
+
+.filter-option.selected:hover {
+    background-color: #d4e9dd;
 }
 
 .filter-option.hidden {
@@ -802,8 +464,10 @@
 }
 
 .filter-option input[type="checkbox"] {
-    margin-right: 8px;
+    margin-right: 10px;
     cursor: pointer;
+    accent-color: #217346;
+    flex-shrink: 0;
 }
 
 .filter-option-label {
@@ -814,115 +478,482 @@
 
 .filter-select-actions {
     display: flex;
-    gap: 6px;
-    margin-top: 8px;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
 }
 
 .filter-select-action {
-    padding: 4px 10px;
-    font-size: 10px;
-    color: #0078d4;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #217346;
     background: transparent;
-    border: 1px solid #0078d4;
-    border-radius: 3px;
+    border: 1px solid #217346;
+    border-radius: 4px;
     cursor: pointer;
+    transition: all 0.2s ease;
 }
 
 .filter-select-action:hover {
-    background: #0078d4;
+    background: #217346;
     color: #ffffff;
 }
 
-.filter-actions {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 12px;
-    justify-content: center;
+/* 搜索模式下的按钮样式 */
+.filter-select-actions.search-mode {
+    background: #fff4ce;
+    border: 1px solid #ffaa44;
 }
 
-/* 图标按钮样式 */
-.icon-button {
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    font-size: 16px;
+.filter-select-actions.search-mode .filter-select-action {
+    color: #b35900;
+    border-color: #b35900;
+    background: #ffffff;
+}
+
+.filter-select-actions.search-mode .filter-select-action:hover {
+    background: #b35900;
+    color: #ffffff;
+}
+
+/* 搜索模式提示文字 */
+.filter-search-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: #b35900;
+    background: #fff4ce;
+    border: 1px dashed #ffaa44;
+    border-radius: 4px;
+}
+
+.filter-search-hint .ms-Icon {
+    font-size: 14px;
+    color: #ffaa44;
+}
+
+/* ========================================
+   筛选操作按钮区域
+   ======================================== */
+.filter-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    justify-content: center;
+    padding: 10px 0;
+    background: #faf9f8;
+    border-radius: 4px;
+}
+
+/* ========================================
+   当前筛选条件显示
+   ======================================== */
+.current-filter-display {
+    background: #faf9f8;
+    border: 1px solid #edebe9;
+    border-radius: 4px;
+    padding: 12px;
+    min-height: 40px;
+}
+
+.current-filter-title {
+    font-weight: 600;
     color: #323130;
-    background-color: #f3f2f1;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.current-filter-items {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.current-filter-item {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: #323130;
+    padding: 6px 10px;
+    background: #ffffff;
+    border-radius: 4px;
+    border: 1px solid #edebe9;
+}
+
+.filter-field {
+    font-weight: 600;
+    color: #217346;
+}
+
+.filter-separator {
+    margin: 0 6px;
+    color: #605e5c;
+}
+
+.filter-value {
+    color: #323130;
+}
+
+.no-filters {
+    color: #605e5c;
+    text-align: center;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.no-filters .ms-Icon {
+    color: #a19f9d;
+}
+
+/* ========================================
+   筛选条件列表
+   ======================================== */
+.filter-conditions-list {
+    min-height: 40px;
+}
+
+.filter-condition-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: #faf9f8;
+    border: 1px solid #edebe9;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.filter-condition-item:hover {
+    background: #f3f2f1;
+    border-color: #c8c6c4;
+}
+
+.filter-condition-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.filter-name-display {
+    font-weight: 500;
+    color: #217346;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.filter-name-display:hover {
+    text-decoration: underline;
+}
+
+.filter-name-edit-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.filter-name-input {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 12px;
+    border: 1px solid #217346;
+    border-radius: 4px;
+    outline: none;
+    min-width: 80px;
+}
+
+.filter-name-input:focus {
+    box-shadow: 0 0 0 1px #217346;
+}
+
+.filter-condition-time {
+    font-size: 11px;
+    color: #605e5c;
+}
+
+.filter-condition-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* ========================================
+   报表列表表格
+   ======================================== */
+.reports-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.reports-table thead {
+    background: #f3f2f1;
+}
+
+.reports-table th {
+    padding: 10px 12px;
+    text-align: left;
+    color: #323130;
+    border-bottom: 2px solid #edebe9;
+}
+
+.reports-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f2f1;
+    color: #323130;
+}
+
+.reports-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.reports-table tbody tr:hover {
+    background-color: #faf9f8;
+}
+
+/* 主报表行样式 */
+.main-report-row {
+    background-color: #e6f2eb;
+}
+
+.main-report-row:hover {
+    background-color: #d4e9dd !important;
+}
+
+.main-report-link {
+    color: #217346;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.main-report-link:hover {
+    text-decoration: underline;
+}
+
+.main-report-badge {
+    font-size: 10px;
+    color: #217346;
+    background: #d4e9dd;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+/* 报表名称显示和编辑 */
+.report-name-display {
+    color: #217346;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.report-name-display:hover {
+    text-decoration: underline;
+}
+
+.report-name-edit-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.report-name-input {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 12px;
+    border: 1px solid #217346;
+    border-radius: 4px;
+    outline: none;
+    min-width: 100px;
+}
+
+.report-name-input:focus {
+    box-shadow: 0 0 0 1px #217346;
+}
+
+.edit-hint-icon {
+    color: #217346;
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+.no-reports {
+    text-align: center;
+    color: #605e5c;
+    padding: 24px !important;
+}
+
+/* 小图标按钮 */
+.icon-button-small {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 14px;
+    color: #323130;
+    background-color: #ffffff;
     border: 1px solid #c8c6c4;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-.icon-button:hover:not(:disabled) {
-    background-color: #edebe9;
-    border-color: #8a8886;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.icon-button:disabled {
+.icon-button-small:hover {
     background-color: #f3f2f1;
-    color: #a19f9d;
-    cursor: not-allowed;
-    border-color: #e1dfdd;
+    border-color: #8a8886;
 }
 
-.icon-button.primary {
-    background-color: #0078d4;
-    color: #ffffff;
-    border-color: #0078d4;
-}
-
-.icon-button.primary:hover:not(:disabled) {
-    background-color: #106ebe;
-}
-
-.icon-button.success {
-    background-color: #107c10;
-    color: #ffffff;
-    border-color: #107c10;
-}
-
-.icon-button.success:hover:not(:disabled) {
-    background-color: #0b5c0b;
-}
-
-.icon-button.danger {
-    background-color: #fff;
+.icon-button-small.danger {
     color: #d13438;
     border-color: #d13438;
 }
 
-.icon-button.danger:hover:not(:disabled) {
+.icon-button-small.danger:hover {
     background-color: #d13438;
     color: #ffffff;
 }
 
-/* Fluent UI 图标字体 */
-.icon-button .ms-Icon {
-    font-size: 16px;
+/* ========================================
+   消息区域
+   ======================================== */
+.message-area {
+    margin: 0 12px 12px 12px;
+    padding: 12px 16px;
+    border-radius: 4px;
+    min-height: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-.subsection-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: #605e5c;
-    margin: 12px 0 8px 0;
+.message-area:empty {
+    display: none;
 }
 
-.filter-summary {
-    font-size: 11px;
-    color: #0078d4;
-    padding: 8px;
-    background: #deecf9;
-    border-radius: 3px;
+.message-area.success {
+    background-color: #dff6dd;
+    color: #107c10;
+    border-left: 4px solid #107c10;
 }
 
-/* 进度条叠加层 */
+.message-area.error {
+    background-color: #fde7e9;
+    color: #d13438;
+    border-left: 4px solid #d13438;
+}
+
+/* ========================================
+   调试日志
+   ======================================== */
+.debug-log {
+    margin: 0 12px 12px 12px;
+    padding: 12px;
+    background-color: #faf9f8;
+    border: 1px solid #edebe9;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: "Consolas", "Monaco", "Courier New", monospace;
+    display: none;
+}
+
+.debug-log.show {
+    display: block;
+}
+
+.debug-log div {
+    margin-bottom: 4px;
+    line-height: 1.5;
+    color: #323130;
+}
+
+/* ========================================
+   确认对话框
+   ======================================== */
+.confirm-dialog-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.confirm-dialog-overlay.show {
+    display: flex;
+}
+
+.confirm-dialog {
+    background: #ffffff;
+    border-radius: 4px;
+    box-shadow: 0 25.6px 57.6px 0 rgba(0, 0, 0, 0.22),
+                0 4.8px 14.4px 0 rgba(0, 0, 0, 0.18);
+    min-width: 320px;
+    max-width: 90%;
+    overflow: hidden;
+}
+
+.confirm-dialog-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #edebe9;
+}
+
+.confirm-dialog-header .ms-Dialog-title {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #323130;
+}
+
+.confirm-dialog-header .ms-Icon {
+    color: #ffaa44;
+    font-size: 20px;
+}
+
+.confirm-dialog-body {
+    padding: 20px;
+}
+
+.confirm-dialog-body p {
+    margin: 0;
+    line-height: 1.6;
+    color: #323130;
+    white-space: pre-line;
+}
+
+.confirm-dialog-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #edebe9;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background: #faf9f8;
+}
+
+/* ========================================
+   进度条叠加层
+   ======================================== */
 .progress-overlay {
     display: none;
     position: fixed;
@@ -930,7 +961,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.5);
     z-index: 2000;
     align-items: center;
     justify-content: center;
@@ -942,9 +973,10 @@
 
 .progress-dialog {
     background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
-    min-width: 320px;
+    border-radius: 4px;
+    box-shadow: 0 25.6px 57.6px 0 rgba(0, 0, 0, 0.22),
+                0 4.8px 14.4px 0 rgba(0, 0, 0, 0.18);
+    min-width: 340px;
     max-width: 90%;
     overflow: hidden;
 }
@@ -952,16 +984,18 @@
 .progress-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     padding: 16px 20px;
-    border-bottom: 1px solid #e1dfdd;
-    background: linear-gradient(135deg, #0078d4 0%, #106ebe 100%);
+    background: linear-gradient(135deg, #217346 0%, #185c37 100%);
     color: #ffffff;
 }
 
 .progress-header .ms-Icon {
-    font-size: 20px;
-    animation: spin 1.5s linear infinite;
+    font-size: 24px;
+}
+
+.spinning-icon {
+    animation: spin 1.2s linear infinite;
 }
 
 @keyframes spin {
@@ -969,42 +1003,85 @@
     to { transform: rotate(360deg); }
 }
 
-#progress-title {
-    font-size: 16px;
-    font-weight: 600;
-}
-
 .progress-body {
-    padding: 20px;
+    padding: 24px 20px;
 }
 
 #progress-message {
-    font-size: 13px;
-    color: #323130;
-    margin: 0 0 16px 0;
+    margin: 0 0 20px 0;
     text-align: center;
+    color: #323130;
 }
 
 .progress-bar-container {
     width: 100%;
     height: 8px;
-    background-color: #e1dfdd;
+    background-color: #edebe9;
     border-radius: 4px;
     overflow: hidden;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
 .progress-bar {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #0078d4 0%, #00bcf2 100%);
+    background: linear-gradient(90deg, #217346 0%, #2e9d5a 100%);
     border-radius: 4px;
     transition: width 0.3s ease;
 }
 
 .progress-detail {
-    font-size: 12px;
-    color: #605e5c;
     text-align: center;
+    color: #605e5c;
     margin: 0;
+}
+
+/* ========================================
+   响应式布局微调
+   ======================================== */
+@media (max-width: 480px) {
+    .section-card {
+        margin: 0 8px 8px 8px;
+        padding: 12px;
+    }
+    
+    .config-step .ms-Grid-col {
+        width: 100%;
+        margin-bottom: 6px;
+    }
+    
+    .step-label-col {
+        margin-bottom: 4px;
+    }
+    
+    .filter-actions {
+        flex-wrap: wrap;
+    }
+    
+    .ms-Button--icon {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+/* ========================================
+   滚动条美化
+   ======================================== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f3f2f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c8c6c4;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a19f9d;
 }

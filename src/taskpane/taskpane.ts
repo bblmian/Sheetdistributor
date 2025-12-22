@@ -1732,10 +1732,14 @@ function renderFilterPanel(): void {
     
     dropdownHtml += `
         </div>
-        <div class="filter-select-actions">
+        <div class="filter-select-actions" id="${fieldId}-actions">
           <button class="filter-select-action" data-field-index="${activeFilterFieldIndex}" data-action="all">全选</button>
           <button class="filter-select-action" data-field-index="${activeFilterFieldIndex}" data-action="none">全不选</button>
           <button class="filter-select-action" data-field-index="${activeFilterFieldIndex}" data-action="invert">反选</button>
+        </div>
+        <div class="filter-search-hint" id="${fieldId}-search-hint" style="display: none;">
+          <i class="ms-Icon ms-Icon--Info" aria-hidden="true"></i>
+          <span>以上操作仅针对当前搜索结果</span>
         </div>
       </div>
     `;
@@ -1743,8 +1747,7 @@ function renderFilterPanel(): void {
   
   panel.innerHTML = tagsHtml + dropdownHtml;
   
-  // 绑定事件
-  bindFilterPanelEvents();
+  // 注意：不再每次都绑定事件，事件已在初始化时通过事件委托绑定到 panel 上
 }
 
 // HTML 转义函数
@@ -1754,59 +1757,195 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
-// 绑定筛选面板事件
+// 标记：筛选面板事件是否已绑定
+let filterPanelEventsBound = false;
+
+// 绑定筛选面板事件（使用事件委托，只绑定一次）
 function bindFilterPanelEvents(): void {
   const panel = document.getElementById("filter-panel");
-  if (!panel) return;
+  if (!panel || filterPanelEventsBound) return;
   
-  // 标签点击事件 - 切换激活的字段
-  const tags = panel.querySelectorAll(".filter-tag");
-  tags.forEach((tag) => {
-    tag.addEventListener("click", (e) => {
-      const target = e.currentTarget as HTMLElement;
-      const fieldIndex = parseInt(target.getAttribute("data-field-index") || "-1", 10);
+  filterPanelEventsBound = true;
+  console.log("[筛选面板] 绑定事件委托");
+  
+  // 使用事件委托处理所有点击事件
+  panel.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    
+    // 1. 标签点击事件 - 切换激活的字段
+    const tagElement = target.closest(".filter-tag") as HTMLElement;
+    if (tagElement) {
+      const fieldIndex = parseInt(tagElement.getAttribute("data-field-index") || "-1", 10);
       
       if (fieldIndex === activeFilterFieldIndex) {
-        // 如果点击的是当前激活的标签，则收起
         activeFilterFieldIndex = -1;
       } else {
-        // 否则切换到新的字段
         activeFilterFieldIndex = fieldIndex;
       }
       
-      // 重新渲染面板
       renderFilterPanel();
-    });
-  });
-  
-  // 关闭下拉框按钮
-  const closeBtn = document.getElementById("btn-close-dropdown");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => {
+      return;
+    }
+    
+    // 2. 关闭下拉框按钮
+    if (target.id === "btn-close-dropdown" || target.closest("#btn-close-dropdown")) {
       activeFilterFieldIndex = -1;
       renderFilterPanel();
-    });
-  }
-  
-  // 搜索框事件
-  const searchInputs = panel.querySelectorAll(".filter-field-search");
-  searchInputs.forEach((input) => {
-    input.addEventListener("input", (e) => {
-      const target = e.target as HTMLInputElement;
-      const fieldIndex = parseInt(target.getAttribute("data-field-index") || "0", 10);
-      filterSearchOptions(fieldIndex, target.value);
-    });
-  });
-  
-  // 复选框点击事件
-  panel.addEventListener("change", (e) => {
-    const target = e.target as HTMLInputElement;
-    if (target.type === "checkbox") {
-      const fieldIndex = parseInt(target.getAttribute("data-field-index") || "0", 10);
-      const value = target.getAttribute("data-value") || "";
+      return;
+    }
+    
+    // 3. 全选/全不选/反选按钮事件
+    const actionButton = target.closest(".filter-select-action") as HTMLElement;
+    if (actionButton) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const fieldIndex = parseInt(actionButton.getAttribute("data-field-index") || "0", 10);
+      const action = actionButton.getAttribute("data-action");
+      
+      console.log(`[筛选操作] action=${action}, fieldIndex=${fieldIndex}`);
       
       if (fieldIndex >= 0 && fieldIndex < filterPanelFields.length) {
         const field = filterPanelFields[fieldIndex];
+        
+        // 直接检查搜索框内容来判断是否处于搜索模式
+        const searchInput = document.getElementById(`filter-field-${fieldIndex}-search`) as HTMLInputElement;
+        const searchText = searchInput ? searchInput.value.trim() : "";
+        const isSearchMode = searchText.length > 0;
+        
+        console.log(`[筛选操作] isSearchMode=${isSearchMode}, searchText="${searchText}"`);
+        console.log(`[筛选操作] 操作前 selectedValues.size=${field.selectedValues.size}, allValues.length=${field.allValues.length}`);
+        
+        if (isSearchMode) {
+          // 搜索模式：只操作可见选项
+          const optionsContainer = document.getElementById(`filter-field-${fieldIndex}-options`);
+          const visibleValues: string[] = [];
+          if (optionsContainer) {
+            const options = optionsContainer.querySelectorAll(".filter-option:not(.hidden)");
+            options.forEach((option) => {
+              const valueIndexStr = option.getAttribute("data-value-index");
+              const valueIndex = valueIndexStr !== null ? parseInt(valueIndexStr, 10) : -1;
+              const value = valueIndex >= 0 && valueIndex < field.allValues.length 
+                ? field.allValues[valueIndex] 
+                : option.getAttribute("data-value") || "";
+              visibleValues.push(value);
+            });
+          }
+          
+          console.log(`[筛选操作] 搜索模式，可见选项数: ${visibleValues.length}`);
+          
+          if (action === "all") {
+            for (const v of visibleValues) {
+              field.selectedValues.add(v);
+            }
+          } else if (action === "none") {
+            for (const v of visibleValues) {
+              field.selectedValues.delete(v);
+            }
+          } else if (action === "invert") {
+            for (const v of visibleValues) {
+              if (field.selectedValues.has(v)) {
+                field.selectedValues.delete(v);
+              } else {
+                field.selectedValues.add(v);
+              }
+            }
+          }
+        } else {
+          // 非搜索模式：操作所有选项
+          console.log(`[筛选操作] 非搜索模式，操作所有 ${field.allValues.length} 个选项`);
+          
+          if (action === "all") {
+            field.selectedValues = new Set<string>(field.allValues);
+          } else if (action === "none") {
+            field.selectedValues = new Set<string>();
+          } else if (action === "invert") {
+            const newSelected = new Set<string>();
+            for (const v of field.allValues) {
+              if (!field.selectedValues.has(v)) {
+                newSelected.add(v);
+              }
+            }
+            console.log(`[筛选操作] 反选：之前选中 ${field.selectedValues.size} 个，反选后应选中 ${newSelected.size} 个`);
+            field.selectedValues = newSelected;
+          }
+        }
+        
+        console.log(`[筛选操作] 操作后 selectedValues.size=${field.selectedValues.size}`);
+        
+        // 重新渲染下拉框中的选项
+        updateFieldOptions(fieldIndex);
+        // 更新标签上的计数
+        updateTagCount(fieldIndex);
+      }
+      return;
+    }
+    
+    // 4. 点击选项行切换选中状态（但不是复选框本身）
+    const optionDiv = target.closest(".filter-option") as HTMLElement;
+    if (optionDiv && target.tagName !== "INPUT") {
+      const fieldIndex = parseInt(optionDiv.getAttribute("data-field-index") || "0", 10);
+      const checkbox = optionDiv.querySelector("input[type='checkbox']") as HTMLInputElement;
+      
+      if (fieldIndex >= 0 && fieldIndex < filterPanelFields.length && checkbox) {
+        const field = filterPanelFields[fieldIndex];
+        
+        // 使用 data-value-index 来获取原始值
+        const valueIndexStr = optionDiv.getAttribute("data-value-index");
+        const valueIndex = valueIndexStr !== null ? parseInt(valueIndexStr, 10) : -1;
+        const value = valueIndex >= 0 && valueIndex < field.allValues.length 
+          ? field.allValues[valueIndex] 
+          : optionDiv.getAttribute("data-value") || "";
+        
+        // 切换选中状态
+        const newChecked = !checkbox.checked;
+        checkbox.checked = newChecked;
+        
+        if (newChecked) {
+          field.selectedValues.add(value);
+        } else {
+          field.selectedValues.delete(value);
+        }
+        
+        // 更新选项的 selected 样式
+        optionDiv.classList.toggle("selected", newChecked);
+        
+        // 更新标签上的计数
+        updateTagCount(fieldIndex);
+      }
+      return;
+    }
+  });
+  
+  // 搜索框输入事件
+  panel.addEventListener("input", (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target.classList.contains("filter-field-search")) {
+      const fieldIndex = parseInt(target.getAttribute("data-field-index") || "0", 10);
+      filterSearchOptions(fieldIndex, target.value);
+    }
+  });
+  
+  // 复选框 change 事件（用于直接点击复选框的情况）
+  panel.addEventListener("change", (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target.type === "checkbox" && target.closest(".filter-option")) {
+      const fieldIndex = parseInt(target.getAttribute("data-field-index") || "0", 10);
+      
+      if (fieldIndex >= 0 && fieldIndex < filterPanelFields.length) {
+        const field = filterPanelFields[fieldIndex];
+        
+        // 使用 data-value-index 来获取原始值
+        const optionDiv = target.closest(".filter-option") as HTMLElement;
+        let value = target.getAttribute("data-value") || "";
+        if (optionDiv) {
+          const valueIndexStr = optionDiv.getAttribute("data-value-index");
+          const valueIndex = valueIndexStr !== null ? parseInt(valueIndexStr, 10) : -1;
+          if (valueIndex >= 0 && valueIndex < field.allValues.length) {
+            value = field.allValues[valueIndex];
+          }
+        }
+        
         if (target.checked) {
           field.selectedValues.add(value);
         } else {
@@ -1814,43 +1953,10 @@ function bindFilterPanelEvents(): void {
         }
         
         // 更新选项的 selected 样式
-        const optionDiv = target.closest(".filter-option");
         if (optionDiv) {
           optionDiv.classList.toggle("selected", target.checked);
         }
         
-        // 更新标签上的计数
-        updateTagCount(fieldIndex);
-      }
-    }
-  });
-  
-  // 全选/全不选/反选按钮事件
-  panel.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    if (target.classList.contains("filter-select-action")) {
-      const fieldIndex = parseInt(target.getAttribute("data-field-index") || "0", 10);
-      const action = target.getAttribute("data-action");
-      
-      if (fieldIndex >= 0 && fieldIndex < filterPanelFields.length) {
-        const field = filterPanelFields[fieldIndex];
-        
-        if (action === "all") {
-          field.selectedValues = new Set<string>(field.allValues);
-        } else if (action === "none") {
-          field.selectedValues = new Set<string>();
-        } else if (action === "invert") {
-          const newSelected = new Set<string>();
-          for (const v of field.allValues) {
-            if (!field.selectedValues.has(v)) {
-              newSelected.add(v);
-            }
-          }
-          field.selectedValues = newSelected;
-        }
-        
-        // 重新渲染下拉框中的选项
-        updateFieldOptions(fieldIndex);
         // 更新标签上的计数
         updateTagCount(fieldIndex);
       }
@@ -1883,16 +1989,34 @@ function updateTagCount(fieldIndex: number): void {
 // 根据搜索关键字过滤选项
 function filterSearchOptions(fieldIndex: number, searchText: string): void {
   const optionsContainer = document.getElementById(`filter-field-${fieldIndex}-options`);
+  const actionsContainer = document.getElementById(`filter-field-${fieldIndex}-actions`);
+  const searchHint = document.getElementById(`filter-field-${fieldIndex}-search-hint`);
   if (!optionsContainer) return;
   
   const options = optionsContainer.querySelectorAll(".filter-option");
-  const searchLower = searchText.toLowerCase();
+  const searchLower = searchText.toLowerCase().trim();
+  const hasSearchText = searchLower.length > 0;
   
+  let visibleCount = 0;
   options.forEach((option) => {
     const value = option.getAttribute("data-value") || "";
     const matches = value.toLowerCase().includes(searchLower);
     option.classList.toggle("hidden", !matches);
+    if (matches) visibleCount++;
   });
+  
+  // 当有搜索文字时，显示提示并给按钮添加特殊样式
+  if (actionsContainer) {
+    actionsContainer.classList.toggle("search-mode", hasSearchText);
+  }
+  if (searchHint) {
+    searchHint.style.display = hasSearchText ? "flex" : "none";
+    // 更新提示文字，显示当前可见的选项数量
+    const hintSpan = searchHint.querySelector("span");
+    if (hintSpan && hasSearchText) {
+      hintSpan.textContent = `以上操作仅针对当前搜索结果（${visibleCount} 项）`;
+    }
+  }
 }
 
 // 更新字段的选项（用于全选/反选后）
@@ -1903,7 +2027,13 @@ function updateFieldOptions(fieldIndex: number): void {
   
   const options = optionsContainer.querySelectorAll(".filter-option");
   options.forEach((option) => {
-    const value = option.getAttribute("data-value") || "";
+    // 使用 data-value-index 来获取原始值，避免 HTML 编码问题
+    const valueIndexStr = option.getAttribute("data-value-index");
+    const valueIndex = valueIndexStr !== null ? parseInt(valueIndexStr, 10) : -1;
+    const value = valueIndex >= 0 && valueIndex < field.allValues.length 
+      ? field.allValues[valueIndex] 
+      : option.getAttribute("data-value") || "";
+    
     const isSelected = field.selectedValues.has(value);
     const checkbox = option.querySelector("input[type='checkbox']") as HTMLInputElement;
     if (checkbox) {
@@ -1911,6 +2041,8 @@ function updateFieldOptions(fieldIndex: number): void {
     }
     option.classList.toggle("selected", isSelected);
   });
+  
+  console.log(`[updateFieldOptions] fieldIndex=${fieldIndex}, 更新了 ${options.length} 个选项`);
 }
 
 // 更新字段计数显示
@@ -2417,9 +2549,25 @@ async function generateReport(): Promise<void> {
       // 在内存中处理数据
       const filteredRows: any[][] = [];
       
+      // 确保每行数据的列数与 columnCount 一致的辅助函数
+      const normalizeRow = (rowData: any[]): any[] => {
+        if (!rowData || !Array.isArray(rowData)) {
+          return new Array(columnCount).fill("");
+        }
+        if (rowData.length === columnCount) {
+          return rowData;
+        } else if (rowData.length < columnCount) {
+          // 补充空值
+          return [...rowData, ...new Array(columnCount - rowData.length).fill("")];
+        } else {
+          // 截断多余的列
+          return rowData.slice(0, columnCount);
+        }
+      };
+      
       // 第一行通常是表头，始终保留（不累加金额）
       if (usedRange.values.length > 0 && usedRange.values[0]) {
-        filteredRows.push(usedRange.values[0]);
+        filteredRows.push(normalizeRow(usedRange.values[0]));
       }
       
       // 从第二行开始，只处理可见的行（rowHidden === false）
@@ -2432,13 +2580,19 @@ async function generateReport(): Promise<void> {
         if (row && !row.rowHidden) {
           const rowData = usedRange.values[i];
           if (rowData && Array.isArray(rowData)) {
-            filteredRows.push(rowData);
+            filteredRows.push(normalizeRow(rowData));
             visibleRowCount++;
           }
         }
       }
       
       const filteredCount = filteredRows.length - 1; // 减去表头
+      
+      // 如果没有可见的数据行（只有表头），提示用户
+      if (filteredCount === 0) {
+        showMessage("筛选后没有符合条件的数据行，请调整筛选条件后重试。", true);
+        return;
+      }
       appendDebugLog(`筛选完成，可见数据行数: ${filteredCount}`);
       
       // 从 filteredRows 计算总金额（只累加数据行，跳过表头）
@@ -2505,31 +2659,42 @@ async function generateReport(): Promise<void> {
       newSheet.load("name");
       
       // 从筛选面板获取当前应用的筛选条件（只记录用户选定的字段）
+      // 格式：【字段名称】：（条件值）\n
       let currentFilterText = "无筛选条件";
+      interface FilterDisplayItem {
+        fieldName: string;
+        values: string;
+      }
+      const filterDisplayItems: FilterDisplayItem[] = [];
+      
       try {
-        const filterItems: string[] = [];
-        
         // 从筛选面板字段中获取有筛选的字段
         for (const field of filterPanelFields) {
           // 只记录有筛选的字段（选中的值少于全部值，且至少选中一个）
           if (field.selectedValues.size < field.allValues.length && field.selectedValues.size > 0) {
             const selectedValuesArray = Array.from(field.selectedValues);
             
-            // 只显示前5个值，避免太长
+            // 显示所有值，用分号分隔
             let displayValues: string;
             if (selectedValuesArray.length <= 5) {
-              displayValues = selectedValuesArray.join(", ");
+              displayValues = selectedValuesArray.join("; ");
             } else {
-              displayValues = selectedValuesArray.slice(0, 5).join(", ") + `... (共${selectedValuesArray.length}项)`;
+              displayValues = selectedValuesArray.slice(0, 5).join("; ") + `... (共${selectedValuesArray.length}项)`;
             }
             
-            filterItems.push(`${field.headerText}: ${displayValues}`);
+            filterDisplayItems.push({
+              fieldName: field.headerText,
+              values: displayValues
+            });
             appendDebugLog(`筛选条件 - ${field.headerText}: ${selectedValuesArray.length}/${field.allValues.length}项`);
           }
         }
         
-        if (filterItems.length > 0) {
-          currentFilterText = filterItems.join("; ");
+        if (filterDisplayItems.length > 0) {
+          // 格式：【字段名称】：（条件值）\n
+          currentFilterText = filterDisplayItems.map(item => 
+            `【${item.fieldName}】：${item.values}`
+          ).join("\n");
           appendDebugLog(`筛选条件: ${currentFilterText}`);
         } else {
           // 如果筛选面板没有筛选条件，检查是否有行被隐藏
@@ -2551,8 +2716,13 @@ async function generateReport(): Promise<void> {
         appendDebugLog(`获取筛选条件失败: ${error.message}`);
       }
       
-      // 写入 Dashboard 区域 (Row 1-6) - 麦肯锡商务风格（增加一行显示筛选条件）
-      const dashboardRange = newSheet.getRange("A1:E6");
+      // 计算 Dashboard 区域的行数（基础 4 行 + 筛选条件行数）
+      const filterRowCount = filterDisplayItems.length > 0 ? filterDisplayItems.length : 1;
+      const dashboardEndRow = 4 + filterRowCount + 1; // +1 for spacing row
+      const dataStartRow = dashboardEndRow + 1;
+      
+      // 写入 Dashboard 区域 - 麦肯锡商务风格
+      const dashboardRange = newSheet.getRange(`A1:E${dashboardEndRow}`);
       dashboardRange.format.verticalAlignment = Excel.VerticalAlignment.center;
       dashboardRange.format.horizontalAlignment = Excel.HorizontalAlignment.left;
       dashboardRange.format.fill.color = "#F5F5F5"; // 浅灰色背景
@@ -2560,17 +2730,14 @@ async function generateReport(): Promise<void> {
       dashboardRange.format.font.size = 11;
       dashboardRange.format.font.color = "#323130";
       
-      // 设置 Dashboard 内容
-      const dashboardData = [
+      // 设置 Dashboard 基础内容（前3行）
+      const dashboardBaseData = [
         ["报表 Dashboard", "", "", "", ""],
         ["总条数", filteredCount.toString(), "", "源表名称", sourceSheetName],
-        ["总金额", totalAmount.toFixed(2), "", "生成时间", new Date().toLocaleString("zh-CN")],
-        ["筛选条件", currentFilterText, "", "", ""],
-        ["", "", "", "", ""],
-        ["", "", "", "", ""]
+        ["总金额", totalAmount.toFixed(2), "", "生成时间", new Date().toLocaleString("zh-CN")]
       ];
-      
-      dashboardRange.values = dashboardData;
+      const dashboardBaseRange = newSheet.getRange("A1:E3");
+      dashboardBaseRange.values = dashboardBaseData;
       
       // 合并 Dashboard 标题单元格
       const titleCell = newSheet.getRange("A1:E1");
@@ -2581,29 +2748,78 @@ async function generateReport(): Promise<void> {
       titleCell.format.horizontalAlignment = Excel.HorizontalAlignment.center;
       
       // 设置 Dashboard 标签列（A列）的样式
-      const labelRange = newSheet.getRange("A2:A4");
+      const labelRange = newSheet.getRange("A2:A3");
       labelRange.format.font.bold = true;
       labelRange.format.font.color = "#323130";
       
       // 设置 Dashboard 数据列的样式
-      const dataRange = newSheet.getRange("B2:B3");
-      dataRange.format.font.color = "#0078d4";
-      dataRange.format.font.bold = true;
-      
-      // 设置筛选条件行的样式
-      const filterLabelCell = newSheet.getRange("A4");
-      filterLabelCell.format.font.bold = true;
-      filterLabelCell.format.font.color = "#323130";
-      const filterValueCell = newSheet.getRange("B4:E4");
-      filterValueCell.merge();
-      filterValueCell.format.font.color = "#605e5c";
-      filterValueCell.format.wrapText = true;
+      const dataRangeDashboard = newSheet.getRange("B2:B3");
+      dataRangeDashboard.format.font.color = "#0078d4";
+      dataRangeDashboard.format.font.bold = true;
       
       // 设置 Dashboard 右侧标签和数据的样式
       const rightLabelRange = newSheet.getRange("D2:D3");
       rightLabelRange.format.font.bold = true;
       const rightDataRange = newSheet.getRange("E2:E3");
       rightDataRange.format.font.color = "#323130";
+      
+      // 设置源表名称为超链接（点击返回原表标题行左起第一个单元格）
+      const sourceSheetLinkCell = newSheet.getRange("E2");
+      // 构建超链接地址：原表的标题行左起第一个单元格
+      const configHeaderRow = currentMainReportConfig?.headerRow || 1;
+      const linkAddress = `'${sourceSheetName}'!A${configHeaderRow}`;
+      sourceSheetLinkCell.hyperlink = {
+        address: "",
+        documentReference: linkAddress,
+        screenTip: `点击返回原表: ${sourceSheetName}`,
+        textToDisplay: sourceSheetName
+      };
+      sourceSheetLinkCell.format.font.color = "#0078d4";
+      sourceSheetLinkCell.format.font.underline = Excel.RangeUnderlineStyle.single;
+      
+      // 写入筛选条件区域（从第4行开始，每个筛选字段一行）
+      // 格式：A列 = "筛选条件"，B列 = 字段名称（深蓝色），C列 = 条件值
+      if (filterDisplayItems.length > 0) {
+        for (let i = 0; i < filterDisplayItems.length; i++) {
+          const rowNum = 4 + i;
+          const item = filterDisplayItems[i];
+          
+          // 写入一整行数据（A-E列）
+          const rowRange = newSheet.getRange(`A${rowNum}:E${rowNum}`);
+          if (i === 0) {
+            rowRange.values = [["筛选条件", `【${item.fieldName}】`, item.values, "", ""]];
+          } else {
+            rowRange.values = [["", `【${item.fieldName}】`, item.values, "", ""]];
+          }
+          
+          // A 列样式
+          const labelCell = newSheet.getRange(`A${rowNum}`);
+          labelCell.format.font.bold = true;
+          labelCell.format.font.color = "#323130";
+          
+          // B 列样式（字段名称，深蓝色）
+          const fieldNameCell = newSheet.getRange(`B${rowNum}`);
+          fieldNameCell.format.font.color = "#0d47a1"; // 深蓝色
+          fieldNameCell.format.font.bold = true;
+          
+          // C 列样式（条件值）
+          const valueCell = newSheet.getRange(`C${rowNum}`);
+          valueCell.format.font.color = "#323130";
+          valueCell.format.wrapText = true;
+        }
+      } else {
+        // 无筛选条件
+        const noFilterRow = newSheet.getRange("A4:E4");
+        noFilterRow.values = [["筛选条件", "无筛选条件", "", "", ""]];
+        
+        const noFilterLabelCell = newSheet.getRange("A4");
+        noFilterLabelCell.format.font.bold = true;
+        noFilterLabelCell.format.font.color = "#323130";
+        
+        const noFilterValueCell = newSheet.getRange("B4");
+        noFilterValueCell.format.font.color = "#a19f9d";
+        noFilterValueCell.format.font.italic = true;
+      }
       
       // 添加 Dashboard 边框
       dashboardRange.format.borders.getItem("EdgeTop").style = Excel.BorderLineStyle.continuous;
@@ -2619,11 +2835,45 @@ async function generateReport(): Promise<void> {
       dashboardRange.format.borders.getItem("InsideVertical").style = Excel.BorderLineStyle.continuous;
       dashboardRange.format.borders.getItem("InsideVertical").color = "#E1E1E1";
       
-      // 写入数据（从第 6 行开始）- 麦肯锡商务风格
+      // 先同步一下，确保前面的合并单元格操作完成
+      await context.sync();
+      
+      // 写入数据（从 dataStartRow 行开始）- 麦肯锡商务风格
       if (filteredRows.length > 0) {
         const lastColumnName = getColumnName(columnCount - 1);
-        const dataRange = newSheet.getRange(`A6:${lastColumnName}${6 + filteredRows.length - 1}`);
-        dataRange.values = filteredRows;
+        
+        // 调试：输出数据维度信息
+        appendDebugLog(`准备写入数据...`);
+        appendDebugLog(`目标范围: A${dataStartRow}:${lastColumnName}${dataStartRow + filteredRows.length - 1}`);
+        appendDebugLog(`filteredRows.length = ${filteredRows.length}`);
+        appendDebugLog(`columnCount = ${columnCount}`);
+        
+        // 验证每行的列数
+        for (let i = 0; i < filteredRows.length; i++) {
+          const rowLen = filteredRows[i] ? filteredRows[i].length : 0;
+          if (rowLen !== columnCount) {
+            appendDebugLog(`警告: 第 ${i} 行列数 (${rowLen}) 与 columnCount (${columnCount}) 不匹配`);
+          }
+        }
+        
+        // 计算目标范围的行列数
+        const targetRowCount = filteredRows.length;
+        const targetColCount = columnCount;
+        appendDebugLog(`目标区域: ${targetRowCount} 行 x ${targetColCount} 列`);
+        
+        const dataRange = newSheet.getRange(`A${dataStartRow}:${lastColumnName}${dataStartRow + filteredRows.length - 1}`);
+        
+        try {
+          dataRange.values = filteredRows;
+        } catch (writeError) {
+          appendDebugLog(`写入数据失败: ${writeError.message}`);
+          // 尝试获取更多信息
+          appendDebugLog(`第一行数据: ${JSON.stringify(filteredRows[0])}`);
+          if (filteredRows.length > 1) {
+            appendDebugLog(`第二行数据: ${JSON.stringify(filteredRows[1])}`);
+          }
+          throw writeError;
+        }
         
         // 设置整体数据区域样式
         dataRange.format.font.name = "Arial";
@@ -2632,8 +2882,8 @@ async function generateReport(): Promise<void> {
         dataRange.format.verticalAlignment = Excel.VerticalAlignment.center;
         dataRange.format.horizontalAlignment = Excel.HorizontalAlignment.left;
         
-        // 设置表头格式（第6行）
-        const headerRange = newSheet.getRange(`A6:${lastColumnName}6`);
+        // 设置表头格式（dataStartRow行）
+        const headerRange = newSheet.getRange(`A${dataStartRow}:${lastColumnName}${dataStartRow}`);
         headerRange.format.fill.color = "#0078d4"; // 麦肯锡蓝色背景
         headerRange.format.font.bold = true;
         headerRange.format.font.color = "#FFFFFF"; // 白色文字
@@ -2652,9 +2902,9 @@ async function generateReport(): Promise<void> {
         headerRange.format.borders.getItem("EdgeRight").style = Excel.BorderLineStyle.continuous;
         headerRange.format.borders.getItem("EdgeRight").color = "#005a9e";
         
-        // 设置数据行样式（从第7行开始）
+        // 设置数据行样式（从dataStartRow+1行开始）
         if (filteredRows.length > 1) {
-          const dataRowsRange = newSheet.getRange(`A7:${lastColumnName}${6 + filteredRows.length - 1}`);
+          const dataRowsRange = newSheet.getRange(`A${dataStartRow + 1}:${lastColumnName}${dataStartRow + filteredRows.length - 1}`);
           
           // 添加数据行边框
           dataRowsRange.format.borders.getItem("EdgeTop").style = Excel.BorderLineStyle.continuous;
@@ -2671,9 +2921,10 @@ async function generateReport(): Promise<void> {
           dataRowsRange.format.borders.getItem("InsideVertical").color = "#F0F0F0";
           
           // 交替行背景色（可选，更商务化）
-          for (let i = 7; i <= 6 + filteredRows.length; i++) {
+          const dataRowStart = dataStartRow + 1;
+          for (let i = dataRowStart; i <= dataStartRow + filteredRows.length - 1; i++) {
             const rowRange = newSheet.getRange(`A${i}:${lastColumnName}${i}`);
-            if ((i - 7) % 2 === 0) {
+            if ((i - dataRowStart) % 2 === 0) {
               // 偶数行使用浅灰色背景
               rowRange.format.fill.color = "#FAFAFA";
             } else {
@@ -2693,12 +2944,8 @@ async function generateReport(): Promise<void> {
       allRowsRange.format.rowHeight = 20; // 统一行高
       
       // Dashboard 区域行高稍大
-      const dashboardRows = newSheet.getRange("1:6");
-      dashboardRows.format.rowHeight = 25;
-      
-      // 筛选条件行可能需要更大的高度（如果内容较多）
-      const filterRow = newSheet.getRange("4:4");
-      filterRow.format.rowHeight = 30;
+      const dashboardRows = newSheet.getRange(`1:${dashboardEndRow}`);
+      dashboardRows.format.rowHeight = 22;
       
       // 激活新工作表
       newSheet.activate();
@@ -2847,6 +3094,9 @@ Office.onReady((info) => {
     document.getElementById("data-range-info")?.addEventListener("click", () => {
       goToMainReport();
     });
+    
+    // 绑定筛选面板事件委托（只绑定一次）
+    bindFilterPanelEvents();
     
     // 初始化显示
     loadMainReportConfig().then(() => {

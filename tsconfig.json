@@ -18,7 +18,8 @@
     "node_modules",
     "dist",
     "lib",
-    "lib-amd"
+    "lib-amd",
+    "src/wps-jsa"
   ],
   "ts-node": { 
     "files": true 
