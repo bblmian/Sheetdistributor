@@ -160,6 +160,112 @@ function appendDebugLog(message: string): void {
   console.log(message);
 }
 
+// 生成筛选条件的文本格式
+function generateFilterText(): string {
+  const filterItems: string[] = [];
+  
+  for (const field of filterPanelFields) {
+    // 只显示有筛选的字段（选中的值少于全部值，且至少选中一个）
+    if (field.selectedValues.size < field.allValues.length && field.selectedValues.size > 0) {
+      const valuesArray = Array.from(field.selectedValues);
+      const valuesText = valuesArray.length > 5 
+        ? valuesArray.slice(0, 5).join("、") + `...等${valuesArray.length}项`
+        : valuesArray.join("、");
+      filterItems.push(`【${field.headerText}】：${valuesText}`);
+    }
+  }
+  
+  if (filterItems.length === 0) {
+    return "无筛选条件";
+  }
+  
+  return filterItems.join("\n");
+}
+
+// 更新筛选条件文本区域
+function updateFilterTextDisplay(autoHide: boolean = false): void {
+  const container = document.getElementById("filter-text-container");
+  const content = document.getElementById("filter-text-content");
+  
+  if (!container || !content) return;
+  
+  const filterText = generateFilterText();
+  
+  if (filterText === "无筛选条件" && autoHide) {
+    container.style.display = "none";
+    return;
+  }
+  
+  // 显示容器
+  container.style.display = "block";
+  
+  // 生成带样式的 HTML 内容
+  const htmlContent = filterText.split("\n").map(line => {
+    // 解析 【字段名】：值 格式
+    const match = line.match(/【(.+?)】：(.+)/);
+    if (match) {
+      return `<span class="field-name">【${match[1]}】</span>：<span class="field-value">${match[2]}</span>`;
+    }
+    return line;
+  }).join("<br>");
+  
+  content.innerHTML = htmlContent;
+}
+
+// 复制筛选条件到剪贴板
+async function copyFilterTextToClipboard(): Promise<boolean> {
+  const filterText = generateFilterText();
+  
+  if (filterText === "无筛选条件") {
+    return false;
+  }
+  
+  try {
+    await navigator.clipboard.writeText(filterText);
+    showCopySuccessHint();
+    return true;
+  } catch (error) {
+    console.error("复制到剪贴板失败:", error);
+    // 备用方案：使用传统的复制方式
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = filterText;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      showCopySuccessHint();
+      return true;
+    } catch (fallbackError) {
+      console.error("备用复制方式也失败:", fallbackError);
+      return false;
+    }
+  }
+}
+
+// 显示复制成功提示
+function showCopySuccessHint(): void {
+  const hint = document.getElementById("copy-success-hint");
+  if (hint) {
+    hint.classList.add("show");
+    setTimeout(() => {
+      hint.classList.remove("show");
+    }, 2000);
+  }
+}
+
+// 绑定筛选条件文本区域的点击事件
+function bindFilterTextEvents(): void {
+  const content = document.getElementById("filter-text-content");
+  if (content) {
+    content.addEventListener("click", async () => {
+      await copyFilterTextToClipboard();
+    });
+  }
+}
+
 // 清空调试日志
 function clearDebugLog(): void {
   const debugLog = document.getElementById("debug-log");
@@ -2176,6 +2282,10 @@ async function applyFilterFromPanel(): Promise<void> {
       
       updateCurrentFilterDisplay(filterSettings);
       
+      // 更新筛选条件文本区域并自动复制到剪贴板
+      updateFilterTextDisplay();
+      await copyFilterTextToClipboard();
+      
       // 显示结果
       const filterSummary = filterEntries.map(f => {
         const count = f.allowedValues.size;
@@ -2225,6 +2335,13 @@ async function clearFilterFromPanel(): Promise<void> {
       await context.sync();
       
       updateCurrentFilterDisplay([]);
+      
+      // 隐藏筛选条件文本区域
+      const filterTextContainer = document.getElementById("filter-text-container");
+      if (filterTextContainer) {
+        filterTextContainer.style.display = "none";
+      }
+      
       showMessage("已清除所有筛选");
     });
   } catch (error) {
@@ -2403,6 +2520,12 @@ async function resetFilterAndGoToMainReport(): Promise<void> {
       activeFilterFieldIndex = -1;
       renderFilterPanel();
       refreshCurrentFilterDisplay();
+      
+      // 隐藏筛选条件文本区域
+      const filterTextContainer = document.getElementById("filter-text-container");
+      if (filterTextContainer) {
+        filterTextContainer.style.display = "none";
+      }
       
       showMessage("已重置筛选并跳转到主报表");
     });
@@ -2960,6 +3083,11 @@ async function generateReport(): Promise<void> {
       
       showMessage(`报表生成成功！共 ${filteredCount} 条记录，总金额: ${totalAmount.toFixed(2)}`);
     });
+    
+    // 更新筛选条件文本区域并自动复制到剪贴板
+    updateFilterTextDisplay();
+    await copyFilterTextToClipboard();
+    
   } catch (error) {
     console.error("生成报表时出错:", error);
     showMessage(`生成报表失败: ${error.message}`, true);
@@ -3097,6 +3225,9 @@ Office.onReady((info) => {
     
     // 绑定筛选面板事件委托（只绑定一次）
     bindFilterPanelEvents();
+    
+    // 绑定筛选条件文本区域点击事件
+    bindFilterTextEvents();
     
     // 初始化显示
     loadMainReportConfig().then(() => {

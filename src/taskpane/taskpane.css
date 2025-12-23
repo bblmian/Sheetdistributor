@@ -1085,3 +1085,78 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: #a19f9d;
 }
+
+/* ========================================
+   筛选条件文本区域样式
+   ======================================== */
+.filter-text-container {
+    background: #ffffff;
+    border: 1px solid #edebe9;
+    border-radius: 4px;
+    padding: 12px;
+    margin: 0 12px 12px 12px;
+    box-shadow: 0 1.6px 3.6px 0 rgba(0, 0, 0, 0.132), 
+                0 0.3px 0.9px 0 rgba(0, 0, 0, 0.108);
+}
+
+.filter-text-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #edebe9;
+    color: #323130;
+}
+
+.filter-text-header .ms-Icon {
+    font-size: 14px;
+    color: #217346;
+}
+
+.copy-success-hint {
+    margin-left: auto;
+    color: #107c10;
+    background-color: #dff6dd;
+    padding: 2px 8px;
+    border-radius: 10px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.copy-success-hint.show {
+    opacity: 1;
+}
+
+.filter-text-content {
+    background-color: #faf9f8;
+    border: 1px solid #e1dfdd;
+    border-radius: 4px;
+    padding: 10px 12px;
+    color: #323130;
+    line-height: 1.6;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.filter-text-content:hover {
+    background-color: #edebe9;
+    border-color: #0078d4;
+}
+
+.filter-text-content:active {
+    background-color: #e1dfdd;
+}
+
+.filter-text-content .field-name {
+    color: #0d47a1;
+    font-weight: 600;
+}
+
+.filter-text-content .field-value {
+    color: #323130;
+}
