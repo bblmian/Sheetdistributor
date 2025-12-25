@@ -356,6 +356,97 @@ body {
     opacity: 0.8;
 }
 
+/* 时间字段标记按钮 */
+.time-field-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #8a8886;
+    background: #f3f2f1;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.time-field-toggle:hover {
+    background: #e1dfdd;
+    color: #605e5c;
+}
+
+.time-field-toggle.active {
+    background: #e1bee7;
+    color: #7b1fa2;
+}
+
+/* 时间字段标签样式 */
+.filter-tag.time-field {
+    background: #f3e5f5;
+    border-color: #ce93d8;
+}
+
+.filter-tag.time-field:hover {
+    background: #e1bee7;
+    border-color: #ba68c8;
+}
+
+.filter-tag.time-field.active {
+    background: #9c27b0;
+    border-color: #9c27b0;
+    color: #ffffff;
+}
+
+.filter-tag.time-field .time-field-toggle {
+    background: rgba(255, 255, 255, 0.3);
+    color: #7b1fa2;
+}
+
+.filter-tag.time-field.active .time-field-toggle {
+    background: rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+}
+
+/* 时间维度选择器 */
+.time-dimension-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #edebe9;
+}
+
+.time-dimension-label {
+    font-size: 12px;
+    color: #605e5c;
+}
+
+.time-dimension-select {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 12px;
+    border: 1px solid #c8c6c4;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #323130;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.time-dimension-select:hover {
+    border-color: #9c27b0;
+}
+
+.time-dimension-select:focus {
+    outline: none;
+    border-color: #9c27b0;
+    box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.2);
+}
+
 /* 展开的筛选选项区域 */
 .filter-dropdown {
     display: none;

@@ -88,12 +88,18 @@ let filterConditionsList: FilterCondition[] = [];
 // 当前主报表配置
 let currentMainReportConfig: MainReportConfig | null = null;
 
+// 时间筛选维度类型
+type TimeDimension = "year" | "month" | "day" | "all";
+
 // 筛选面板字段数据接口
 interface FilterFieldData {
   columnIndex: number;
   headerText: string;
   allValues: string[]; // 该列所有唯一值
   selectedValues: Set<string>; // 用户选中的值
+  isTimeField: boolean; // 是否为时间字段
+  timeDimension: TimeDimension; // 时间筛选维度
+  timeValues?: { year: string[]; month: string[]; day: string[] }; // 时间维度值
 }
 
 // 当前筛选面板的字段数据
@@ -1567,7 +1573,9 @@ async function applyFilterCondition(index: number, sheetName: string): Promise<v
           columnIndex: colIdx,
           headerText: headerText,
           allValues: sortedValues,
-          selectedValues: selectedValues
+          selectedValues: selectedValues,
+          isTimeField: false,
+          timeDimension: "all"
         });
       }
       
@@ -1853,7 +1861,9 @@ async function enableFilter(): Promise<void> {
           columnIndex: colIdx,
           headerText: headerText,
           allValues: sortedValues,
-          selectedValues: new Set<string>(sortedValues) // 默认全选
+          selectedValues: new Set<string>(sortedValues), // 默认全选
+          isTimeField: false,
+          timeDimension: "all"
         });
       }
       
@@ -1909,11 +1919,14 @@ function renderFilterPanel(): void {
     let tagClass = "filter-tag";
     if (isFiltered) tagClass += " filtered";
     if (isActive) tagClass += " active";
+    if (field.isTimeField) tagClass += " time-field";
     
     tagsHtml += `
       <div class="${tagClass}" data-field-index="${i}">
         <span class="filter-tag-name">${escapeHtml(field.headerText)}</span>
         <span class="filter-tag-count">${isFiltered ? selectedCount + '/' : ''}${totalCount}</span>
+        <span class="time-field-toggle ${field.isTimeField ? 'active' : ''}" 
+              data-field-index="${i}" title="标记为时间字段">T</span>
       </div>
     `;
   }
@@ -1927,19 +1940,42 @@ function renderFilterPanel(): void {
     const field = filterPanelFields[activeFilterFieldIndex];
     const fieldId = `filter-field-${activeFilterFieldIndex}`;
     
+    // 时间维度选择器（仅时间字段显示）
+    let timeDimensionHtml = '';
+    if (field.isTimeField) {
+      timeDimensionHtml = `
+        <div class="time-dimension-selector">
+          <span class="time-dimension-label">筛选维度：</span>
+          <select class="time-dimension-select" id="${fieldId}-dimension" data-field-index="${activeFilterFieldIndex}">
+            <option value="all" ${field.timeDimension === 'all' ? 'selected' : ''}>全部值</option>
+            <option value="year" ${field.timeDimension === 'year' ? 'selected' : ''}>按年</option>
+            <option value="month" ${field.timeDimension === 'month' ? 'selected' : ''}>按月</option>
+            <option value="day" ${field.timeDimension === 'day' ? 'selected' : ''}>按日</option>
+          </select>
+        </div>
+      `;
+    }
+    
     dropdownHtml = `
       <div class="filter-dropdown show" data-field-index="${activeFilterFieldIndex}">
         <div class="filter-dropdown-header">
           <span class="filter-dropdown-title">${escapeHtml(field.headerText)} 筛选</span>
           <button class="filter-dropdown-close" id="btn-close-dropdown">收起</button>
         </div>
+        ${timeDimensionHtml}
         <input type="text" class="filter-field-search" placeholder="搜索选项..." 
                id="${fieldId}-search" data-field-index="${activeFilterFieldIndex}">
         <div class="filter-options-container" id="${fieldId}-options">
     `;
     
-    for (let j = 0; j < field.allValues.length; j++) {
-      const value = field.allValues[j];
+    // 根据时间维度获取要显示的选项
+    let displayValues: string[] = field.allValues;
+    if (field.isTimeField && field.timeDimension !== 'all' && field.timeValues) {
+      displayValues = field.timeValues[field.timeDimension] || field.allValues;
+    }
+    
+    for (let j = 0; j < displayValues.length; j++) {
+      const value = displayValues[j];
       const isSelected = field.selectedValues.has(value);
       const displayValue = value.length > 40 ? value.substring(0, 40) + "..." : value;
       
@@ -1980,6 +2016,396 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
+// ========================================
+// 时间字段处理函数
+// ========================================
+
+// 切换时间字段状态
+async function toggleTimeField(fieldIndex: number): Promise<void> {
+  if (fieldIndex < 0 || fieldIndex >= filterPanelFields.length) return;
+  
+  const field = filterPanelFields[fieldIndex];
+  field.isTimeField = !field.isTimeField;
+  
+  if (field.isTimeField) {
+    // 标记为时间字段后，立即检查格式
+    showMessage(`已将"${field.headerText}"标记为时间字段`);
+    await checkTimeFieldFormat(fieldIndex);
+  } else {
+    // 取消时间字段标记，重置时间维度
+    field.timeDimension = "all";
+    field.timeValues = undefined;
+    showMessage(`已取消"${field.headerText}"的时间字段标记`);
+  }
+  
+  renderFilterPanel();
+}
+
+// 检查时间字段格式
+async function checkTimeFieldFormat(fieldIndex: number): Promise<void> {
+  if (fieldIndex < 0 || fieldIndex >= filterPanelFields.length) return;
+  
+  const field = filterPanelFields[fieldIndex];
+  if (!currentMainReportConfig) {
+    showMessage("请先设置主报表配置", true);
+    return;
+  }
+  
+  // 显示进度条
+  showProgress("检查时间格式", "正在检查...");
+  
+  try {
+    await Excel.run(async (context) => {
+      const sheet = context.workbook.worksheets.getItem(currentMainReportConfig!.sheetName);
+      const usedRange = sheet.getUsedRange();
+      usedRange.load("values, rowCount");
+      await context.sync();
+      
+      const colIndex = field.columnIndex;
+      const rowCount = usedRange.rowCount;
+      
+      let standardCount = 0;
+      let nonStandardCount = 0;
+      const nonStandardRows: number[] = [];
+      const nonStandardValues: string[] = [];
+      
+      // 检查每个单元格的时间格式
+      for (let i = 1; i < rowCount; i++) { // 跳过标题行
+        const cellValue = usedRange.values[i][colIndex];
+        
+        // 更新进度
+        if (i % 100 === 0) {
+          updateProgress(i, rowCount, `已检查 ${i}/${rowCount} 行`);
+        }
+        
+        if (cellValue === null || cellValue === undefined || cellValue === "") {
+          continue;
+        }
+        
+        const isStandard = isStandardDateFormat(cellValue);
+        if (isStandard) {
+          standardCount++;
+        } else {
+          nonStandardCount++;
+          if (nonStandardRows.length < 10) { // 最多记录10个示例
+            nonStandardRows.push(i + 1); // Excel 行号
+            nonStandardValues.push(String(cellValue));
+          }
+        }
+      }
+      
+      updateProgress(rowCount, rowCount, "检查完成");
+      hideProgress();
+      
+      // 计算时间维度值
+      calculateTimeValues(fieldIndex, usedRange.values, colIndex);
+      
+      // 显示检查结果
+      if (nonStandardCount === 0) {
+        showMessage(`"${field.headerText}"列共 ${standardCount} 个时间值，全部为标准格式`);
+      } else {
+        // 有非标准格式，询问用户是否处理
+        const examples = nonStandardValues.slice(0, 3).join("、");
+        const confirmMsg = `"${field.headerText}"列检测到 ${nonStandardCount} 个非标准时间格式（如：${examples}...）\n是否自动转换为标准格式？`;
+        
+        if (confirm(confirmMsg)) {
+          await convertTimeFormat(fieldIndex, usedRange, sheet, context);
+        } else {
+          showMessage(`已跳过时间格式转换，共 ${nonStandardCount} 个非标准格式`);
+        }
+      }
+    });
+  } catch (error) {
+    hideProgress();
+    console.error("检查时间格式失败:", error);
+    showMessage(`检查时间格式失败: ${error.message}`, true);
+  }
+}
+
+// 判断是否为标准日期格式
+function isStandardDateFormat(value: any): boolean {
+  if (value === null || value === undefined || value === "") {
+    return true; // 空值视为有效
+  }
+  
+  // 如果是数字（Excel 日期序列号），认为是标准格式
+  if (typeof value === "number") {
+    return true;
+  }
+  
+  const str = String(value).trim();
+  
+  // 常见标准日期格式
+  const standardPatterns = [
+    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/,  // 2024-01-15 或 2024/01/15
+    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2}(:\d{2})?$/,  // 2024-01-15 10:30 或 2024-01-15 10:30:00
+    /^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/,  // 01-15-2024 或 01/15/2024
+    /^\d{4}年\d{1,2}月\d{1,2}日$/,    // 2024年1月15日
+  ];
+  
+  for (const pattern of standardPatterns) {
+    if (pattern.test(str)) {
+      return true;
+    }
+  }
+  
+  // 尝试解析日期
+  const date = new Date(str);
+  if (!isNaN(date.getTime())) {
+    return true;
+  }
+  
+  return false;
+}
+
+// 转换时间格式
+async function convertTimeFormat(
+  fieldIndex: number, 
+  usedRange: Excel.Range, 
+  sheet: Excel.Worksheet, 
+  context: Excel.RequestContext
+): Promise<void> {
+  const field = filterPanelFields[fieldIndex];
+  const colIndex = field.columnIndex;
+  const colName = getColumnName(colIndex);
+  
+  showProgress("转换时间格式", "正在转换...");
+  
+  let convertedCount = 0;
+  const rowCount = usedRange.values.length;
+  
+  for (let i = 1; i < rowCount; i++) { // 跳过标题行
+    const cellValue = usedRange.values[i][colIndex];
+    
+    if (i % 50 === 0) {
+      updateProgress(i, rowCount, `已处理 ${i}/${rowCount} 行`);
+    }
+    
+    if (cellValue === null || cellValue === undefined || cellValue === "") {
+      continue;
+    }
+    
+    if (!isStandardDateFormat(cellValue)) {
+      // 尝试转换
+      const converted = tryConvertToDate(cellValue);
+      if (converted) {
+        const excelRow = i + 1; // Excel 行号
+        const cellAddress = `${colName}${excelRow}`;
+        const cell = sheet.getRange(cellAddress);
+        cell.values = [[converted]];
+        cell.format.font.color = "#7b1fa2"; // 紫色文字标注
+        convertedCount++;
+      }
+    }
+  }
+  
+  await context.sync();
+  
+  updateProgress(rowCount, rowCount, "转换完成");
+  hideProgress();
+  
+  // 重新计算时间维度值
+  await recalculateTimeValues(fieldIndex);
+  
+  showMessage(`已转换 ${convertedCount} 个时间格式，已用紫色文字标注`);
+}
+
+// 尝试将值转换为标准日期格式
+function tryConvertToDate(value: any): string | null {
+  const str = String(value).trim();
+  
+  // 常见的非标准格式转换
+  // 格式1: 20240115 -> 2024-01-15
+  if (/^\d{8}$/.test(str)) {
+    return `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}`;
+  }
+  
+  // 格式2: 2024.01.15 -> 2024-01-15
+  if (/^\d{4}\.\d{1,2}\.\d{1,2}$/.test(str)) {
+    return str.replace(/\./g, "-");
+  }
+  
+  // 格式3: 15-01-2024 (日-月-年) -> 2024-01-15
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmyMatch) {
+    const [, day, month, year] = dmyMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  
+  // 格式4: 2024年1月15日 -> 2024-01-15
+  const cnMatch = str.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日?$/);
+  if (cnMatch) {
+    const [, year, month, day] = cnMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  
+  // 格式5: Jan 15, 2024 或 January 15, 2024 -> 2024-01-15
+  const enMonths: { [key: string]: string } = {
+    "jan": "01", "january": "01",
+    "feb": "02", "february": "02",
+    "mar": "03", "march": "03",
+    "apr": "04", "april": "04",
+    "may": "05",
+    "jun": "06", "june": "06",
+    "jul": "07", "july": "07",
+    "aug": "08", "august": "08",
+    "sep": "09", "september": "09",
+    "oct": "10", "october": "10",
+    "nov": "11", "november": "11",
+    "dec": "12", "december": "12"
+  };
+  
+  const enMatch = str.toLowerCase().match(/^([a-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (enMatch) {
+    const [, monthStr, day, year] = enMatch;
+    const month = enMonths[monthStr];
+    if (month) {
+      return `${year}-${month}-${day.padStart(2, "0")}`;
+    }
+  }
+  
+  // 尝试使用 Date 解析
+  const date = new Date(str);
+  if (!isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  
+  return null;
+}
+
+// 计算时间维度值
+function calculateTimeValues(fieldIndex: number, values: any[][], colIndex: number): void {
+  const field = filterPanelFields[fieldIndex];
+  
+  const years = new Set<string>();
+  const months = new Set<string>();
+  const days = new Set<string>();
+  
+  for (let i = 1; i < values.length; i++) {
+    const cellValue = values[i][colIndex];
+    if (cellValue === null || cellValue === undefined || cellValue === "") {
+      continue;
+    }
+    
+    const dateInfo = extractDateInfo(cellValue);
+    if (dateInfo) {
+      years.add(dateInfo.year);
+      months.add(dateInfo.yearMonth);
+      days.add(dateInfo.date);
+    }
+  }
+  
+  field.timeValues = {
+    year: Array.from(years).sort(),
+    month: Array.from(months).sort(),
+    day: Array.from(days).sort()
+  };
+}
+
+// 从值中提取日期信息
+function extractDateInfo(value: any): { year: string; yearMonth: string; date: string } | null {
+  let date: Date | null = null;
+  
+  if (typeof value === "number") {
+    // Excel 日期序列号转换
+    date = excelDateToJSDate(value);
+  } else {
+    const str = String(value).trim();
+    date = new Date(str);
+    
+    // 如果解析失败，尝试其他格式
+    if (isNaN(date.getTime())) {
+      // 尝试 YYYYMMDD 格式
+      if (/^\d{8}$/.test(str)) {
+        const y = parseInt(str.slice(0, 4));
+        const m = parseInt(str.slice(4, 6)) - 1;
+        const d = parseInt(str.slice(6, 8));
+        date = new Date(y, m, d);
+      }
+    }
+  }
+  
+  if (!date || isNaN(date.getTime())) {
+    return null;
+  }
+  
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  
+  return {
+    year: year,
+    yearMonth: `${year}-${month}`,
+    date: `${year}-${month}-${day}`
+  };
+}
+
+// Excel 日期序列号转 JS Date
+function excelDateToJSDate(excelDate: number): Date {
+  // Excel 日期从 1900-01-01 开始（序列号 1）
+  // 但 Excel 错误地认为 1900 年是闰年，所以需要调整
+  const excelEpoch = new Date(1899, 11, 30); // 1899-12-30
+  const msPerDay = 24 * 60 * 60 * 1000;
+  return new Date(excelEpoch.getTime() + excelDate * msPerDay);
+}
+
+// 重新计算时间维度值
+async function recalculateTimeValues(fieldIndex: number): Promise<void> {
+  if (!currentMainReportConfig) return;
+  
+  const field = filterPanelFields[fieldIndex];
+  
+  try {
+    await Excel.run(async (context) => {
+      const sheet = context.workbook.worksheets.getItem(currentMainReportConfig!.sheetName);
+      const usedRange = sheet.getUsedRange();
+      usedRange.load("values");
+      await context.sync();
+      
+      calculateTimeValues(fieldIndex, usedRange.values, field.columnIndex);
+    });
+  } catch (error) {
+    console.error("重新计算时间维度值失败:", error);
+  }
+}
+
+// 改变时间筛选维度
+function changeTimeDimension(fieldIndex: number, dimension: TimeDimension): void {
+  if (fieldIndex < 0 || fieldIndex >= filterPanelFields.length) return;
+  
+  const field = filterPanelFields[fieldIndex];
+  field.timeDimension = dimension;
+  
+  // 根据维度更新 selectedValues
+  if (dimension === "all") {
+    // 恢复原始值选择
+    field.selectedValues = new Set<string>(field.allValues);
+  } else if (field.timeValues && field.timeValues[dimension]) {
+    // 使用时间维度值
+    field.selectedValues = new Set<string>(field.timeValues[dimension]);
+  }
+  
+  renderFilterPanel();
+  showMessage(`已切换"${field.headerText}"筛选维度为：${getDimensionLabel(dimension)}`);
+}
+
+// 获取维度标签
+function getDimensionLabel(dimension: TimeDimension): string {
+  switch (dimension) {
+    case "year": return "按年";
+    case "month": return "按月";
+    case "day": return "按日";
+    default: return "全部值";
+  }
+}
+
+// ========================================
+// 时间字段处理函数结束
+// ========================================
+
 // 标记：筛选面板事件是否已绑定
 let filterPanelEventsBound = false;
 
@@ -1995,15 +2421,32 @@ function bindFilterPanelEvents(): void {
   panel.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     
+    // 0. T按钮点击事件 - 切换时间字段状态
+    if (target.classList.contains("time-field-toggle")) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const fieldIndex = parseInt(target.getAttribute("data-field-index") || "-1", 10);
+      if (fieldIndex >= 0 && fieldIndex < filterPanelFields.length) {
+        toggleTimeField(fieldIndex);
+      }
+      return;
+    }
+    
     // 1. 标签点击事件 - 切换激活的字段
     const tagElement = target.closest(".filter-tag") as HTMLElement;
-    if (tagElement) {
+    if (tagElement && !target.classList.contains("time-field-toggle")) {
       const fieldIndex = parseInt(tagElement.getAttribute("data-field-index") || "-1", 10);
       
       if (fieldIndex === activeFilterFieldIndex) {
         activeFilterFieldIndex = -1;
       } else {
         activeFilterFieldIndex = fieldIndex;
+        
+        // 如果是时间字段，激活时自动检查格式
+        if (filterPanelFields[fieldIndex].isTimeField) {
+          checkTimeFieldFormat(fieldIndex);
+        }
       }
       
       renderFilterPanel();
@@ -2182,6 +2625,17 @@ function bindFilterPanelEvents(): void {
         
         // 更新标签上的计数
         updateTagCount(fieldIndex);
+      }
+    }
+    
+    // 时间维度选择器 change 事件
+    if (target.classList.contains("time-dimension-select")) {
+      const fieldIndex = parseInt(target.getAttribute("data-field-index") || "-1", 10);
+      const selectEl = target as unknown as HTMLSelectElement;
+      const dimension = selectEl.value as TimeDimension;
+      
+      if (fieldIndex >= 0 && fieldIndex < filterPanelFields.length) {
+        changeTimeDimension(fieldIndex, dimension);
       }
     }
   });
