@@ -9,21 +9,21 @@
    全局基础样式
    ======================================== */
 html, body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
+     width: 100%;
+     height: 100%;
+     margin: 0;
+     padding: 0;
     background-color: #f3f2f1;
 }
 
 body {
     color: #323130;
-}
-
+ }
+ 
 .ms-Grid {
-    padding: 0;
-}
-
+     padding: 0;
+ }
+ 
 /* ========================================
    Header 样式
    ======================================== */
@@ -568,7 +568,7 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-}
+ }
 
 .current-filter-items {
     display: flex;
@@ -673,8 +673,8 @@ body {
     border-radius: 4px;
     outline: none;
     min-width: 80px;
-}
-
+ }
+ 
 .filter-name-input:focus {
     box-shadow: 0 0 0 1px #217346;
 }
@@ -694,7 +694,7 @@ body {
    报表列表表格
    ======================================== */
 .reports-table {
-    width: 100%;
+     width: 100%;
     border-collapse: collapse;
 }
 
@@ -792,7 +792,7 @@ body {
 }
 
 .no-reports {
-    text-align: center;
+     text-align: center;
     color: #605e5c;
     padding: 24px !important;
 }
@@ -871,8 +871,8 @@ body {
     overflow-y: auto;
     font-family: "Consolas", "Monaco", "Courier New", monospace;
     display: none;
-}
-
+ }
+ 
 .debug-log.show {
     display: block;
 }
@@ -968,9 +968,9 @@ body {
 }
 
 .progress-overlay.show {
-    display: flex;
-}
-
+     display: flex;
+ }
+ 
 .progress-dialog {
     background: #ffffff;
     border-radius: 4px;
@@ -1028,8 +1028,8 @@ body {
     background: linear-gradient(90deg, #217346 0%, #2e9d5a 100%);
     border-radius: 4px;
     transition: width 0.3s ease;
-}
-
+ }
+ 
 .progress-detail {
     text-align: center;
     color: #605e5c;
@@ -1052,8 +1052,8 @@ body {
     
     .step-label-col {
         margin-bottom: 4px;
-    }
-    
+ }
+ 
     .filter-actions {
         flex-wrap: wrap;
     }
@@ -1135,7 +1135,7 @@ body {
     padding: 10px 12px;
     color: #323130;
     line-height: 1.6;
-    cursor: pointer;
+  cursor: pointer;
     transition: all 0.2s ease;
     white-space: pre-wrap;
     word-break: break-all;
@@ -1159,4 +1159,58 @@ body {
 
 .filter-text-content .field-value {
     color: #323130;
+}
+
+/* 统计数据样式 */
+.filter-text-content .stat-label {
+    color: #0078d4;
+    font-weight: 600;
+}
+
+.filter-text-content .stat-value {
+    color: #107c10;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+/* 分隔线样式 */
+.filter-text-content .filter-text-divider {
+    border: none;
+    border-top: 1px dashed #d2d0ce;
+    margin: 6px 0;
+}
+
+/* ========================================
+   筛选条件展开/收起样式
+   ======================================== */
+.filter-expand-link,
+.filter-collapse-link {
+    color: #0078d4;
+    text-decoration: none;
+    cursor: pointer;
+    margin-left: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.filter-expand-link:hover,
+.filter-collapse-link:hover {
+    text-decoration: underline;
+    color: #004578;
+}
+
+.filter-value-collapsed,
+.filter-value-expanded {
+    color: #323130;
+    word-break: break-all;
+}
+
+.filter-value-expanded {
+    background-color: #f5f5f5;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: block;
+    margin-top: 4px;
+    max-height: 150px;
+    overflow-y: auto;
 }

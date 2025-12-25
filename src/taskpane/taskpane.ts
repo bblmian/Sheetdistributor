@@ -99,6 +99,20 @@ interface FilterFieldData {
 // 当前筛选面板的字段数据
 let filterPanelFields: FilterFieldData[] = [];
 
+// 筛选统计数据接口
+interface FilterStatistics {
+  filteredRowCount: number;   // 筛选出的行数
+  totalAmount: number;        // 合计金额
+  isValid: boolean;           // 是否有效（是否已计算）
+}
+
+// 当前筛选的统计数据
+let currentFilterStatistics: FilterStatistics = {
+  filteredRowCount: 0,
+  totalAmount: 0,
+  isValid: false
+};
+
 // 显示消息到消息区域
 function showMessage(message: string, isError: boolean = false): void {
   const messageArea = document.getElementById("message-area");
@@ -164,6 +178,15 @@ function appendDebugLog(message: string): void {
 function generateFilterText(): string {
   const filterItems: string[] = [];
   
+  // 首先添加统计数据
+  if (currentFilterStatistics.isValid) {
+    filterItems.push(`筛选出的总条数：${currentFilterStatistics.filteredRowCount}`);
+    filterItems.push(`对应合计金额：${currentFilterStatistics.totalAmount.toFixed(2)}`);
+    filterItems.push(""); // 空行分隔
+  }
+  
+  // 添加筛选条件
+  let hasFilter = false;
   for (const field of filterPanelFields) {
     // 只显示有筛选的字段（选中的值少于全部值，且至少选中一个）
     if (field.selectedValues.size < field.allValues.length && field.selectedValues.size > 0) {
@@ -172,10 +195,11 @@ function generateFilterText(): string {
         ? valuesArray.slice(0, 5).join("、") + `...等${valuesArray.length}项`
         : valuesArray.join("、");
       filterItems.push(`【${field.headerText}】：${valuesText}`);
+      hasFilter = true;
     }
   }
   
-  if (filterItems.length === 0) {
+  if (!hasFilter && !currentFilterStatistics.isValid) {
     return "无筛选条件";
   }
   
@@ -201,6 +225,21 @@ function updateFilterTextDisplay(autoHide: boolean = false): void {
   
   // 生成带样式的 HTML 内容
   const htmlContent = filterText.split("\n").map(line => {
+    // 空行处理
+    if (line.trim() === "") {
+      return "<hr class='filter-text-divider'>";
+    }
+    
+    // 统计数据行：筛选出的总条数 或 对应合计金额
+    if (line.startsWith("筛选出的总条数：")) {
+      const value = line.replace("筛选出的总条数：", "");
+      return `<span class="stat-label">筛选出的总条数：</span><span class="stat-value">${value}</span>`;
+    }
+    if (line.startsWith("对应合计金额：")) {
+      const value = line.replace("对应合计金额：", "");
+      return `<span class="stat-label">对应合计金额：</span><span class="stat-value">${value}</span>`;
+    }
+    
     // 解析 【字段名】：值 格式
     const match = line.match(/【(.+?)】：(.+)/);
     if (match) {
@@ -571,8 +610,8 @@ interface MergeCellInfo {
 
 async function setSnColumnWithMergeCheck(): Promise<void> {
   try {
-    // 立即显示加载提示
-    showMessage("正在分析选中列，请稍候...", false);
+    // 立即显示进度条
+    showProgress("检查合并单元格", "正在读取选中列数据...");
     
     await Excel.run(async (context) => {
       const sheet = context.workbook.worksheets.getActiveWorksheet();
@@ -596,10 +635,8 @@ async function setSnColumnWithMergeCheck(): Promise<void> {
       
       console.log(`开始检查列 ${columnNameStr} 的合并单元格，范围: 行${startRow+1}到${startRow+rowCount}`);
       
-      // 优化：显示进度提示
-      if (rowCount > 500) {
-        showMessage(`正在扫描 ${rowCount} 行数据，请稍候...`, false);
-      }
+      // 更新进度条
+      updateProgress(10, 100, `正在扫描第 ${columnIndex + 1} 列 (${columnNameStr})，共 ${rowCount} 行...`);
       
       // 读取整列的值 - 一次性加载
       const columnRange = sheet.getRangeByIndexes(startRow, columnIndex, rowCount, 1);
@@ -609,36 +646,82 @@ async function setSnColumnWithMergeCheck(): Promise<void> {
       const values = columnRange.values;
       console.log(`读取到 ${values.length} 个单元格值`);
       
-      // ===== 高效算法：通过值模式快速检测合并单元格 =====
-      // 合并单元格的特征：主单元格有值，其下方的从属单元格值为 null
-      // 只通过值模式识别，避免大量 API 调用
+      // 更新进度条
+      updateProgress(30, 100, `数据读取完成，正在检测合并单元格...`);
       
+      // ===== 使用 Excel API 直接检测合并单元格 =====
       const mergedCellInfos: MergeCellInfo[] = [];
-      let i = 0;
       
-      while (i < rowCount) {
-        const currentValue = values[i][0];
+      // 方法1：使用 getMergedAreasOrNullObject 直接检测整列的合并区域
+      updateProgress(40, 100, "正在使用 API 检测合并单元格...");
+      
+      try {
+        const mergedAreas = columnRange.getMergedAreasOrNullObject();
+        mergedAreas.load("isNullObject, areaCount");
+        await context.sync();
         
-        // 如果当前单元格有值（非 null），检查后续是否有连续的 null
-        if (currentValue !== null && currentValue !== undefined) {
-          let consecutiveNulls = 0;
+        if (!mergedAreas.isNullObject && mergedAreas.areaCount > 0) {
+          // 加载每个合并区域的信息
+          mergedAreas.load("areas");
+          await context.sync();
+          
+          const areas = mergedAreas.areas;
+          areas.load("items");
+          await context.sync();
+          
+          for (let j = 0; j < areas.items.length; j++) {
+            const area = areas.items[j];
+            area.load("rowCount, address, rowIndex, columnIndex");
+          }
+          await context.sync();
+          
+          for (let j = 0; j < areas.items.length; j++) {
+            const area = areas.items[j];
+            if (area.rowCount > 1 && area.columnIndex === columnIndex) {
+              mergedCellInfos.push({
+                address: area.address,
+                startRow: area.rowIndex,
+                endRow: area.rowIndex + area.rowCount - 1,
+                columnIndex: columnIndex
+              });
+              console.log(`API 检测到合并区域: ${area.address}, 跨${area.rowCount}行`);
+            }
+          }
+        }
+      } catch (apiError) {
+        console.log("API 检测方法失败，使用备用方法:", apiError);
+      }
+      
+      // 方法2（备用）：如果 API 方法没有检测到，使用值模式检测
+      if (mergedCellInfos.length === 0) {
+        updateProgress(50, 100, "使用值模式检测合并单元格...");
+        
+        // 合并单元格的特征：主单元格有值或为空，其下方的从属单元格值为 null 或空字符串
+        let i = 0;
+        
+        while (i < rowCount) {
+          const currentValue = values[i][0];
+          
+          // 检查后续是否有连续的 null 或空值
+          let consecutiveEmpty = 0;
           for (let k = i + 1; k < rowCount; k++) {
             const nextValue = values[k][0];
-            if (nextValue === null) {
-              consecutiveNulls++;
+            // null 或 undefined 或空字符串都视为可能的合并从属单元格
+            if (nextValue === null || nextValue === undefined || nextValue === "") {
+              consecutiveEmpty++;
             } else {
               break;
             }
           }
           
-          if (consecutiveNulls > 0) {
-            // 发现可能的合并区域
+          // 只有当主单元格有值且后续有连续空值时，才认为是合并单元格
+          if (consecutiveEmpty > 0 && currentValue !== null && currentValue !== undefined && currentValue !== "") {
             const cellRowIndex = startRow + i;
-            const mergeRowCount = consecutiveNulls + 1;
+            const mergeRowCount = consecutiveEmpty + 1;
             const endRowIndex = cellRowIndex + mergeRowCount - 1;
             const address = `${columnNameStr}${cellRowIndex + 1}:${columnNameStr}${endRowIndex + 1}`;
             
-            console.log(`通过值模式检测到合并区域: ${address}, 跨${mergeRowCount}行`);
+            console.log(`值模式检测到可能的合并区域: ${address}, 跨${mergeRowCount}行`);
             
             mergedCellInfos.push({
               address: address,
@@ -651,13 +734,16 @@ async function setSnColumnWithMergeCheck(): Promise<void> {
           } else {
             i++;
           }
-        } else {
-          // 当前是 null，可能是空行或独立的 null 值
-          i++;
         }
       }
       
-      console.log(`快速扫描检测到 ${mergedCellInfos.length} 个可能的合并单元格区域`);
+      console.log(`总共检测到 ${mergedCellInfos.length} 个合并单元格区域`);
+      
+      // 更新进度条
+      updateProgress(80, 100, `检测完成，发现 ${mergedCellInfos.length} 个合并区域`);
+      
+      // 隐藏进度条
+      hideProgress();
       
       // 如果存在合并单元格，提示用户
       if (mergedCellInfos.length > 0) {
@@ -802,6 +888,9 @@ async function setSnColumnWithMergeCheck(): Promise<void> {
           
           showMessage(`已拆分并合并 ${mergedCellInfos.length} 个区域的行数据，删除了 ${deletedRows} 行`);
         }
+      } else {
+        // 没有检测到合并单元格，给出提示
+        showMessage(`第 ${columnIndex + 1} 列 (${columnNameStr}) 未检测到合并单元格，共扫描 ${rowCount} 行`, false);
       }
       
       // 继续设置SN列
@@ -840,6 +929,7 @@ async function setSnColumnWithMergeCheck(): Promise<void> {
     });
   } catch (error) {
     console.error("设置SN列时出错:", error);
+    hideProgress(); // 确保隐藏进度条
     showMessage(`设置 S/N 列失败: ${error.message}`, true);
   }
 }
@@ -1128,7 +1218,14 @@ async function confirmEditReportName(index: number, newName: string): Promise<vo
     await Excel.run(async (context) => {
       const workbook = context.workbook;
       const sheet = workbook.worksheets.getItem(oldName);
+      
+      // 修改 sheet 名称
       sheet.name = newName;
+      
+      // 同步修改报表标题（A1 单元格）
+      const titleCell = sheet.getRange("A1");
+      titleCell.values = [[newName]];
+      
       await context.sync();
       
       // 更新本地数据
@@ -1584,19 +1681,77 @@ function updateCurrentFilterDisplay(filterSettings: ColumnFilterSetting[]): void
     return;
   }
   
-  container.innerHTML = `
-    <div class="current-filter-title">当前应用的筛选条件：</div>
-    <div class="current-filter-items">
-      ${activeFilters.map(filter => `
+  // 生成每个筛选条件的 HTML
+  const filterItemsHtml = activeFilters.map((filter, index) => {
+    const values = filter.filterValues;
+    const totalCount = values.length;
+    const MAX_DISPLAY = 3; // 最多显示3个值
+    
+    if (totalCount <= MAX_DISPLAY) {
+      // 值不多，全部显示
+      return `
         <div class="current-filter-item">
           <span class="filter-field">${filter.headerText}</span>
           <span class="filter-separator">：</span>
-          <span class="filter-value">${filter.filterValues.join(", ")}</span>
+          <span class="filter-value">${values.join("、")}</span>
         </div>
-      `).join("")}
+      `;
+    } else {
+      // 值太多，显示前几个 + "等xxx个结果"
+      const displayValues = values.slice(0, MAX_DISPLAY);
+      const remainingCount = totalCount;
+      const filterId = `filter-expand-${index}`;
+      
+      return `
+        <div class="current-filter-item">
+          <span class="filter-field">${filter.headerText}</span>
+          <span class="filter-separator">：</span>
+          <span class="filter-value-collapsed" id="${filterId}-collapsed">
+            ${displayValues.join("、")}
+            <a href="javascript:void(0)" class="filter-expand-link" onclick="expandFilterValues('${filterId}', ${index})">等${remainingCount}个结果</a>
+          </span>
+          <span class="filter-value-expanded" id="${filterId}-expanded" style="display: none;">
+            ${values.join("、")}
+            <a href="javascript:void(0)" class="filter-collapse-link" onclick="collapseFilterValues('${filterId}')">收起</a>
+          </span>
+        </div>
+      `;
+    }
+  }).join("");
+  
+  container.innerHTML = `
+    <div class="current-filter-title">当前应用的筛选条件：</div>
+    <div class="current-filter-items">
+      ${filterItemsHtml}
     </div>
   `;
 }
+
+// 展开筛选值
+function expandFilterValues(filterId: string, _filterIndex: number): void {
+  const collapsedEl = document.getElementById(`${filterId}-collapsed`);
+  const expandedEl = document.getElementById(`${filterId}-expanded`);
+  
+  if (collapsedEl && expandedEl) {
+    collapsedEl.style.display = "none";
+    expandedEl.style.display = "inline";
+  }
+}
+
+// 收起筛选值
+function collapseFilterValues(filterId: string): void {
+  const collapsedEl = document.getElementById(`${filterId}-collapsed`);
+  const expandedEl = document.getElementById(`${filterId}-expanded`);
+  
+  if (collapsedEl && expandedEl) {
+    collapsedEl.style.display = "inline";
+    expandedEl.style.display = "none";
+  }
+}
+
+// 将函数暴露到全局作用域，以便 onclick 调用
+(window as any).expandFilterValues = expandFilterValues;
+(window as any).collapseFilterValues = collapseFilterValues;
 
 // 检测并更新当前筛选条件显示（从筛选面板获取，只显示用户选择的字段）
 function refreshCurrentFilterDisplay(): void {
@@ -1611,21 +1766,13 @@ function refreshCurrentFilterDisplay(): void {
     if (field.selectedValues.size < field.allValues.length && field.selectedValues.size > 0) {
       const selectedValuesArray = Array.from(field.selectedValues);
       
-      // 只显示前5个值，避免太长
-      let displayValues: string[];
-      if (selectedValuesArray.length <= 5) {
-        displayValues = selectedValuesArray;
-      } else {
-        displayValues = selectedValuesArray.slice(0, 5);
-        displayValues.push(`... (共${selectedValuesArray.length}项)`);
-      }
-      
+      // 传递完整的选中值数组，让 updateCurrentFilterDisplay 处理显示逻辑
       columnFilterSettings.push({
         columnIndex: field.columnIndex,
         columnName: getColumnName(field.columnIndex),
         headerText: field.headerText,
         filterType: "values",
-        filterValues: displayValues,
+        filterValues: selectedValuesArray,  // 传递完整的值数组，不截断
         isFiltered: true
       });
     }
@@ -2198,6 +2345,10 @@ async function applyFilterFromPanel(): Promise<void> {
       
       let visibleCount = 0;
       let hiddenCount = 0;
+      let totalAmount = 0; // 合计金额
+      
+      // 获取金额列索引（如果配置了的话）
+      const amtColIndex = currentMainReportConfig?.amtColumn ?? -1;
       
       // 在内存中判断每行是否应该显示
       for (let valueIdx = 1; valueIdx < usedRange.values.length; valueIdx++) {
@@ -2221,10 +2372,22 @@ async function applyFilterFromPanel(): Promise<void> {
         rowVisibility.push(shouldShow);
         if (shouldShow) {
           visibleCount++;
+          // 累加可见行的金额
+          if (amtColIndex >= 0 && amtColIndex < rowData.length) {
+            const amountValue = rowData[amtColIndex];
+            totalAmount += cleanAmount(amountValue);
+          }
         } else {
           hiddenCount++;
         }
       }
+      
+      // 更新筛选统计数据
+      currentFilterStatistics = {
+        filteredRowCount: visibleCount,
+        totalAmount: totalAmount,
+        isValid: true
+      };
       
       // ===== 批量设置行可见性 =====
       // 先重置所有数据行为可见
@@ -2312,6 +2475,13 @@ async function clearFilterFromPanel(): Promise<void> {
   for (const field of filterPanelFields) {
     field.selectedValues = new Set<string>(field.allValues);
   }
+  
+  // 重置筛选统计数据
+  currentFilterStatistics = {
+    filteredRowCount: 0,
+    totalAmount: 0,
+    isValid: false
+  };
   
   // 重新渲染面板
   renderFilterPanel();
@@ -2495,6 +2665,13 @@ async function resetFilterAndGoToMainReport(): Promise<void> {
     showMessage("未配置主报表", true);
     return;
   }
+  
+  // 重置筛选统计数据
+  currentFilterStatistics = {
+    filteredRowCount: 0,
+    totalAmount: 0,
+    isValid: false
+  };
   
   try {
     await Excel.run(async (context) => {
@@ -2896,8 +3073,9 @@ async function generateReport(): Promise<void> {
       dashboardRange.format.font.color = "#323130";
       
       // 设置 Dashboard 基础内容（前3行）
+      // 标题使用 sheet 名称，便于同步修改
       const dashboardBaseData = [
-        ["报表 Dashboard", "", "", "", ""],
+        [newSheetName, "", "", "", ""],
         ["总条数", filteredCount.toString(), "", "源表名称", sourceSheetName],
         ["总金额", totalAmount.toFixed(2), "", "生成时间", new Date().toLocaleString("zh-CN")]
       ];
