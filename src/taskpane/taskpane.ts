@@ -494,17 +494,18 @@ async function setColumnConfig(columnName: string, displayName: string): Promise
       
       // 获取当前选中的范围
       const selection = context.workbook.getSelectedRange();
-      selection.load("address");
+      selection.load("address, columnIndex");
       
       await context.sync();
       
-      // 获取选中范围的整列
-      const selectedColumn = selection.getEntireColumn();
-      selectedColumn.load("columnIndex");
+      // 验证选中范围是否有效
+      if (!selection.address) {
+        showMessage(`请先在 Excel 中选择${displayName}所在的列中的任意单元格`, true);
+        return;
+      }
       
-      await context.sync();
-      
-      const columnIndex = selectedColumn.columnIndex;
+      // 直接使用 selection 的 columnIndex
+      const columnIndex = selection.columnIndex;
       const columnNameStr = getColumnName(columnIndex);
       
       // 创建或更新 NamedItem
@@ -512,31 +513,23 @@ async function setColumnConfig(columnName: string, displayName: string): Promise
       
       // 先尝试删除已存在的（如果存在）
       try {
-        const existingItem = namedItems.getItem(columnName);
-        existingItem.delete();
+        const existingItem = namedItems.getItemOrNullObject(columnName);
         await context.sync();
+        if (!existingItem.isNullObject) {
+          existingItem.delete();
+          await context.sync();
+        }
       } catch (error) {
-        // 如果不存在，忽略错误
+        // 如果删除失败，忽略错误
+        console.log("删除已有 NamedItem 时出错（可能不存在）:", error);
       }
       
-      // 创建新的 NamedItem，引用到选中的列
-      // 使用绝对引用格式：=Sheet1!$A:$A
-      const columnAddress = `=${sheet.name}!$${columnNameStr}:$${columnNameStr}`;
-      namedItems.add(columnName, columnAddress);
+      // 创建新的 NamedItem，引用到选中的单元格所在列的第一个单元格
+      // 使用单元格引用而不是整列引用，避免某些 Excel 版本的兼容问题
+      const cellAddress = `='${sheet.name}'!$${columnNameStr}$1`;
+      namedItems.add(columnName, cellAddress);
       
       await context.sync();
-      
-      // 验证：读取刚创建的 NamedItem，确认列索引正确
-      const verifyItem = namedItems.getItem(columnName);
-      verifyItem.load("name, formula");
-      const verifyRange = verifyItem.getRange();
-      verifyRange.load("columnIndex, address");
-      await context.sync();
-      
-      const verifyColIndex = verifyRange.columnIndex;
-      if (verifyColIndex !== columnIndex) {
-        console.warn(`警告: NamedItem 列索引不匹配！期望: ${columnIndex}, 实际: ${verifyColIndex}`);
-      }
       
       // 更新配置
       if (!currentMainReportConfig) {
@@ -556,7 +549,7 @@ async function setColumnConfig(columnName: string, displayName: string): Promise
         currentMainReportConfig.sheetName = sheet.name;
       }
       
-      showMessage(`成功设置${displayName}为第 ${columnIndex + 1} 列 (${columnNameStr})，验证列索引: ${verifyColIndex + 1}`);
+      showMessage(`成功设置${displayName}为第 ${columnIndex + 1} 列 (${columnNameStr})`);
       
       // 更新配置显示
       updateMainReportConfigDisplay();
@@ -578,6 +571,9 @@ interface MergeCellInfo {
 
 async function setSnColumnWithMergeCheck(): Promise<void> {
   try {
+    // 立即显示加载提示
+    showMessage("正在分析选中列，请稍候...", false);
+    
     await Excel.run(async (context) => {
       const sheet = context.workbook.worksheets.getActiveWorksheet();
       sheet.load("name");
@@ -586,93 +582,45 @@ async function setSnColumnWithMergeCheck(): Promise<void> {
       const selection = context.workbook.getSelectedRange();
       selection.load("address, columnIndex");
       
+      // 获取该列的使用范围
+      const usedRange = sheet.getUsedRange();
+      usedRange.load("rowCount, rowIndex, columnCount, address");
+      
       await context.sync();
       
       const columnIndex = selection.columnIndex;
       const columnNameStr = getColumnName(columnIndex);
-      
-      // 获取该列的使用范围
-      const usedRange = sheet.getUsedRange();
-      usedRange.load("rowCount, rowIndex, columnCount, address");
-      await context.sync();
-      
       const startRow = usedRange.rowIndex;
       const rowCount = usedRange.rowCount;
       const totalColumns = usedRange.columnCount;
       
-      // 使用最直接的方法：通过值检测和手动比较来识别合并单元格
-      // 合并单元格的特征：主单元格有值，其下方的从属单元格值为 null
-      const mergedCellInfos: MergeCellInfo[] = [];
-      
       console.log(`开始检查列 ${columnNameStr} 的合并单元格，范围: 行${startRow+1}到${startRow+rowCount}`);
       
-      // 读取整列的值和格式
+      // 优化：显示进度提示
+      if (rowCount > 500) {
+        showMessage(`正在扫描 ${rowCount} 行数据，请稍候...`, false);
+      }
+      
+      // 读取整列的值 - 一次性加载
       const columnRange = sheet.getRangeByIndexes(startRow, columnIndex, rowCount, 1);
-      columnRange.load("values, address");
+      columnRange.load("values");
       await context.sync();
       
       const values = columnRange.values;
       console.log(`读取到 ${values.length} 个单元格值`);
       
-      // 逐个单元格检查合并状态
+      // ===== 高效算法：通过值模式快速检测合并单元格 =====
+      // 合并单元格的特征：主单元格有值，其下方的从属单元格值为 null
+      // 只通过值模式识别，避免大量 API 调用
+      
+      const mergedCellInfos: MergeCellInfo[] = [];
       let i = 0;
+      
       while (i < rowCount) {
-        const cellRowIndex = startRow + i;
-        const cell = sheet.getCell(cellRowIndex, columnIndex);
+        const currentValue = values[i][0];
         
-        // 获取实际的合并区域 - 使用 getEntireColumn + intersection 方法
-        // 或者直接获取该单元格的扩展区域
-        const extendedRange = cell.getExtendedRange(Excel.KeyboardDirection.down);
-        extendedRange.load("rowCount, address, rowIndex");
-        
-        // 同时加载当前单元格信息
-        cell.load("address, rowIndex, text");
-        
-        await context.sync();
-        
-        // 检查扩展范围是否跨越多行（可能是合并单元格）
-        // 但 getExtendedRange 可能返回的是连续非空区域，不一定是合并单元格
-        
-        // 更可靠的方法：直接用 API 获取合并状态
-        // 尝试获取单元格的实际合并范围
-        let mergeRowCount = 1;
-        let mergeAddress = cell.address;
-        
-        try {
-          // 方法1: 使用 getMergedAreasOrNullObject
-          const mergedAreas = cell.getMergedAreasOrNullObject();
-          mergedAreas.load("isNullObject");
-          await context.sync();
-          
-          if (!mergedAreas.isNullObject) {
-            mergedAreas.load("address, areas");
-            await context.sync();
-            
-            if (mergedAreas.areas && mergedAreas.areas.items) {
-              const areas = mergedAreas.areas;
-              areas.load("items");
-              await context.sync();
-              
-              for (let j = 0; j < areas.items.length; j++) {
-                const area = areas.items[j];
-                area.load("rowCount, address, rowIndex, columnIndex");
-                await context.sync();
-                
-                if (area.rowCount > 1 && area.columnIndex === columnIndex) {
-                  mergeRowCount = area.rowCount;
-                  mergeAddress = area.address;
-                  break;
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.log(`检查单元格 ${cell.address} 时出错:`, e);
-        }
-        
-        // 方法2: 如果方法1没有检测到，检查下方单元格是否为空且属于同一"合并组"
-        if (mergeRowCount === 1 && i < rowCount - 1) {
-          // 检查下一个单元格的值是否为 null（合并单元格的从属部分值为 null）
+        // 如果当前单元格有值（非 null），检查后续是否有连续的 null
+        if (currentValue !== null && currentValue !== undefined) {
           let consecutiveNulls = 0;
           for (let k = i + 1; k < rowCount; k++) {
             const nextValue = values[k][0];
@@ -684,49 +632,32 @@ async function setSnColumnWithMergeCheck(): Promise<void> {
           }
           
           if (consecutiveNulls > 0) {
-            // 可能是合并单元格，需要进一步验证
-            // 尝试选择这个范围并检查
-            const potentialMergeRange = sheet.getRangeByIndexes(cellRowIndex, columnIndex, consecutiveNulls + 1, 1);
-            potentialMergeRange.load("address, rowCount");
-            await context.sync();
+            // 发现可能的合并区域
+            const cellRowIndex = startRow + i;
+            const mergeRowCount = consecutiveNulls + 1;
+            const endRowIndex = cellRowIndex + mergeRowCount - 1;
+            const address = `${columnNameStr}${cellRowIndex + 1}:${columnNameStr}${endRowIndex + 1}`;
             
-            // 检查这个范围是否真的是合并的
-            const mergeCheck = potentialMergeRange.getMergedAreasOrNullObject();
-            mergeCheck.load("isNullObject, address, areaCount");
-            await context.sync();
+            console.log(`通过值模式检测到合并区域: ${address}, 跨${mergeRowCount}行`);
             
-            if (!mergeCheck.isNullObject && mergeCheck.areaCount > 0) {
-              const checkAddress = mergeCheck.address;
-              if (checkAddress && checkAddress.includes(":")) {
-                console.log(`通过空值检测发现可能的合并区域: ${checkAddress}`);
-                mergeRowCount = consecutiveNulls + 1;
-                mergeAddress = potentialMergeRange.address;
-              }
-            } else if (consecutiveNulls > 0) {
-              // 即使 API 没有检测到，如果有连续的 null 值，也可能是合并单元格
-              // 我们保守地将其视为合并单元格
-              console.log(`发现连续 ${consecutiveNulls + 1} 个可能合并的单元格（基于空值）: 行${cellRowIndex + 1}`);
-              mergeRowCount = consecutiveNulls + 1;
-              mergeAddress = potentialMergeRange.address;
-            }
+            mergedCellInfos.push({
+              address: address,
+              startRow: cellRowIndex,
+              endRow: endRowIndex,
+              columnIndex: columnIndex
+            });
+            
+            i += mergeRowCount;
+          } else {
+            i++;
           }
-        }
-        
-        if (mergeRowCount > 1) {
-          console.log(`确认合并单元格: ${mergeAddress}, 跨${mergeRowCount}行`);
-          mergedCellInfos.push({
-            address: mergeAddress,
-            startRow: cellRowIndex,
-            endRow: cellRowIndex + mergeRowCount - 1,
-            columnIndex: columnIndex
-          });
-          i += mergeRowCount;
         } else {
+          // 当前是 null，可能是空行或独立的 null 值
           i++;
         }
       }
       
-      console.log(`最终检测到 ${mergedCellInfos.length} 个合并单元格区域`);
+      console.log(`快速扫描检测到 ${mergedCellInfos.length} 个可能的合并单元格区域`);
       
       // 如果存在合并单元格，提示用户
       if (mergedCellInfos.length > 0) {
@@ -759,70 +690,109 @@ async function setSnColumnWithMergeCheck(): Promise<void> {
           // 从后往前处理，避免删除行后索引错乱
           const sortedInfos = mergedCellInfos.sort((a, b) => b.startRow - a.startRow);
           let deletedRows = 0;
-          const processedFirstRows: number[] = [];
           const totalInfos = sortedInfos.length;
           
+          // ===== 优化：批量读取所有需要的数据 =====
+          // 先计算需要读取的最大范围
+          let minRow = Infinity;
+          let maxRow = 0;
+          for (const info of sortedInfos) {
+            minRow = Math.min(minRow, info.startRow);
+            maxRow = Math.max(maxRow, info.endRow);
+          }
+          
+          // 一次性读取所有相关行的数据
+          const allDataRange = sheet.getRangeByIndexes(minRow, 0, maxRow - minRow + 1, totalColumns);
+          allDataRange.load("values");
+          await context.sync();
+          const allData = allDataRange.values;
+          
+          updateProgress(0, totalInfos, "数据读取完成，开始处理...");
+          
+          // 收集要处理的结果
+          interface MergeResult {
+            firstRowIndex: number;
+            mergedValues: (string | number | boolean | null)[];
+            rowsToDelete: number;
+          }
+          const mergeResults: MergeResult[] = [];
+          
+          // 在内存中处理合并逻辑
           for (let idx = 0; idx < sortedInfos.length; idx++) {
             const info = sortedInfos[idx];
             const rowsToMerge = info.endRow - info.startRow + 1;
             if (rowsToMerge < 2) continue;
             
-            // 更新进度条
-            updateProgress(idx + 1, totalInfos, `处理第 ${idx + 1}/${totalInfos} 个区域: ${info.address}`);
-            
-            console.log(`处理合并区域: ${info.address}, 行数: ${rowsToMerge}`);
-            
-            // 1. 先取消合并单元格
-            const mergeRange = sheet.getRange(info.address);
-            mergeRange.unmerge();
-            await context.sync();
-            
-            // 2. 获取涉及的所有行的数据
             const firstRowIndex = info.startRow;
-            const firstRowRange = sheet.getRangeByIndexes(firstRowIndex, 0, 1, totalColumns);
-            firstRowRange.load("values");
-            await context.sync();
+            const dataOffset = firstRowIndex - minRow;
             
-            const firstRowValues = firstRowRange.values[0].slice();
+            // 复制第一行数据
+            const mergedValues = allData[dataOffset].slice();
             
-            // 处理合并区域中的其他行（从第2行开始）
+            // 合并其他行的数据
             for (let rowOffset = 1; rowOffset < rowsToMerge; rowOffset++) {
-              const currentRowIndex = firstRowIndex + rowOffset;
-              const currentRowRange = sheet.getRangeByIndexes(currentRowIndex, 0, 1, totalColumns);
-              currentRowRange.load("values");
-              await context.sync();
+              const currentDataOffset = dataOffset + rowOffset;
+              if (currentDataOffset >= allData.length) break;
               
-              const currentRowValues = currentRowRange.values[0];
+              const currentRowValues = allData[currentDataOffset];
               
-              // 3. 比较并合并每列的内容
               for (let col = 0; col < totalColumns; col++) {
-                const firstVal = String(firstRowValues[col] || "").trim();
+                const firstVal = String(mergedValues[col] || "").trim();
                 const currentVal = String(currentRowValues[col] || "").trim();
                 
                 if (currentVal && currentVal !== firstVal) {
                   if (firstVal) {
-                    firstRowValues[col] = firstVal + "\n" + currentVal;
+                    mergedValues[col] = firstVal + "\n" + currentVal;
                   } else {
-                    firstRowValues[col] = currentVal;
+                    mergedValues[col] = currentVal;
                   }
                 }
               }
             }
             
-            // 4. 将合并后的内容写入第一行
-            firstRowRange.values = [firstRowValues];
-            firstRowRange.format.wrapText = true;
-            // 用浅灰色标注处理过的行
-            firstRowRange.format.fill.color = "#F5F5F5"; // 浅灰色
+            mergeResults.push({
+              firstRowIndex,
+              mergedValues,
+              rowsToDelete: rowsToMerge - 1
+            });
+          }
+          
+          // ===== 批量执行：取消合并、写入数据、删除行 =====
+          // 分批处理，每批处理一定数量，避免单次操作太多
+          const BATCH_SIZE = 20;
+          
+          for (let batchStart = 0; batchStart < mergeResults.length; batchStart += BATCH_SIZE) {
+            const batchEnd = Math.min(batchStart + BATCH_SIZE, mergeResults.length);
+            const batchResults = mergeResults.slice(batchStart, batchEnd);
+            
+            updateProgress(batchStart, mergeResults.length, `批量处理 ${batchStart + 1}-${batchEnd}/${mergeResults.length}`);
+            
+            // 1. 批量取消合并
+            for (const result of batchResults) {
+              const info = sortedInfos.find(i => i.startRow === result.firstRowIndex);
+              if (info) {
+                const mergeRange = sheet.getRange(info.address);
+                mergeRange.unmerge();
+              }
+            }
             await context.sync();
             
-            processedFirstRows.push(firstRowIndex);
+            // 2. 批量写入合并后的数据
+            for (const result of batchResults) {
+              const firstRowRange = sheet.getRangeByIndexes(result.firstRowIndex, 0, 1, totalColumns);
+              firstRowRange.values = [result.mergedValues];
+              firstRowRange.format.wrapText = true;
+              firstRowRange.format.fill.color = "#F5F5F5";
+            }
+            await context.sync();
             
-            // 5. 删除多余的行（从后往前删除）
-            for (let rowOffset = rowsToMerge - 1; rowOffset > 0; rowOffset--) {
-              const rowToDelete = sheet.getRangeByIndexes(firstRowIndex + rowOffset, 0, 1, totalColumns);
-              rowToDelete.delete(Excel.DeleteShiftDirection.up);
-              deletedRows++;
+            // 3. 批量删除行（从后往前）
+            for (const result of batchResults) {
+              for (let i = result.rowsToDelete; i > 0; i--) {
+                const rowToDelete = sheet.getRangeByIndexes(result.firstRowIndex + i, 0, 1, totalColumns);
+                rowToDelete.delete(Excel.DeleteShiftDirection.up);
+                deletedRows++;
+              }
             }
             await context.sync();
           }
@@ -2179,6 +2149,9 @@ async function applyFilterFromPanel(): Promise<void> {
     return;
   }
   
+  // 立即显示处理提示
+  showMessage("正在应用筛选条件...", false);
+  
   try {
     await Excel.run(async (context) => {
       const workbook = context.workbook;
@@ -2192,9 +2165,9 @@ async function applyFilterFromPanel(): Promise<void> {
       
       targetSheet.activate();
       
-      // 获取使用范围（包括起始行信息）
+      // 获取使用范围
       const usedRange = targetSheet.getUsedRange();
-      usedRange.load("values, rowCount, rowIndex");
+      usedRange.load("values, rowCount, rowIndex, columnCount");
       await context.sync();
       
       if (!usedRange.values || usedRange.values.length === 0) {
@@ -2202,15 +2175,14 @@ async function applyFilterFromPanel(): Promise<void> {
         return;
       }
       
-      // usedRange.rowIndex 是 0-based，第一行是 0
-      const startRow = usedRange.rowIndex + 1; // 转换为 1-based Excel 行号
-      const endRow = startRow + usedRange.rowCount - 1;
+      const startRow = usedRange.rowIndex; // 0-based
+      const rowCount = usedRange.rowCount;
+      const columnCount = usedRange.columnCount;
       
-      // 构建筛选条件 - 只记录有筛选的字段
+      // 构建筛选条件
       const filterEntries: Array<{ colIdx: number; allowedValues: Set<string>; headerText: string }> = [];
       
       for (const field of filterPanelFields) {
-        // 如果该列有筛选（选中的值少于全部值，且至少选中一个）
         if (field.selectedValues.size < field.allValues.length && field.selectedValues.size > 0) {
           filterEntries.push({
             colIdx: field.columnIndex,
@@ -2220,54 +2192,87 @@ async function applyFilterFromPanel(): Promise<void> {
         }
       }
       
-      // 首先显示所有数据行（从标题行的下一行开始）
-      const dataStartRow = startRow + 1; // 跳过标题行
-      for (let excelRow = dataStartRow; excelRow <= endRow; excelRow++) {
-        const row = targetSheet.getRange(`${excelRow}:${excelRow}`);
-        row.rowHidden = false;
-      }
-      await context.sync();
+      // ===== 优化算法：在内存中计算每行的可见状态 =====
+      const rowVisibility: boolean[] = []; // true = 可见, false = 隐藏
+      rowVisibility.push(true); // 标题行始终可见
       
-      // 如果没有筛选条件，直接返回
-      if (filterEntries.length === 0) {
-        updateCurrentFilterDisplay([]);
-        showMessage("已清除所有筛选，显示全部数据");
-        return;
-      }
-      
-      // 遍历每一行数据，应用筛选
-      let hiddenCount = 0;
       let visibleCount = 0;
+      let hiddenCount = 0;
       
-      // usedRange.values[0] 是标题行，从 [1] 开始是数据行
+      // 在内存中判断每行是否应该显示
       for (let valueIdx = 1; valueIdx < usedRange.values.length; valueIdx++) {
         const rowData = usedRange.values[valueIdx];
-        const excelRowNum = startRow + valueIdx; // 对应的 Excel 行号
-        let shouldHide = false;
+        let shouldShow = true;
         
-        // 检查该行是否符合所有筛选条件
-        for (const filter of filterEntries) {
-          if (filter.colIdx < rowData.length) {
-            const cellValue = rowData[filter.colIdx];
-            const cellStr = cellValue !== null && cellValue !== undefined ? String(cellValue) : "";
-            
-            // 如果该单元格的值不在选中的值集合中，则隐藏该行
-            if (!filter.allowedValues.has(cellStr)) {
-              shouldHide = true;
-              break;
+        if (filterEntries.length > 0) {
+          for (const filter of filterEntries) {
+            if (filter.colIdx < rowData.length) {
+              const cellValue = rowData[filter.colIdx];
+              const cellStr = cellValue !== null && cellValue !== undefined ? String(cellValue) : "";
+              
+              if (!filter.allowedValues.has(cellStr)) {
+                shouldShow = false;
+                break;
+              }
             }
           }
         }
         
-        if (shouldHide) {
-          const row = targetSheet.getRange(`${excelRowNum}:${excelRowNum}`);
-          row.rowHidden = true;
-          hiddenCount++;
-        } else {
+        rowVisibility.push(shouldShow);
+        if (shouldShow) {
           visibleCount++;
+        } else {
+          hiddenCount++;
         }
       }
       
+      // ===== 批量设置行可见性 =====
+      // 先重置所有数据行为可见
+      const allDataRowsStart = startRow + 2; // Excel 行号，跳过标题行
+      const allDataRowsEnd = startRow + rowCount;
+      if (allDataRowsEnd >= allDataRowsStart) {
+        const allDataRows = targetSheet.getRange(`${allDataRowsStart}:${allDataRowsEnd}`);
+        allDataRows.rowHidden = false;
+      }
+      await context.sync();
+      
+      // 然后设置需要隐藏的行
+      // 将连续的隐藏行合并为一个范围操作
+      let i = 1; // 从数据行开始（跳过标题行）
+      let hiddenRangeCount = 0;
+      while (i < rowVisibility.length) {
+        if (!rowVisibility[i]) {
+          // 找到需要隐藏的起始行
+          let endIdx = i;
+          
+          // 查找连续需要隐藏的行
+          while (endIdx + 1 < rowVisibility.length && !rowVisibility[endIdx + 1]) {
+            endIdx++;
+          }
+          
+          // 批量隐藏这个范围
+          const rangeStartRow = startRow + i + 1; // Excel 行号 (1-based)
+          const rangeEndRow = startRow + endIdx + 1;
+          const range = targetSheet.getRange(`${rangeStartRow}:${rangeEndRow}`);
+          range.rowHidden = true;
+          hiddenRangeCount++;
+          
+          i = endIdx + 1;
+        } else {
+          i++;
+        }
+      }
+      
+      await context.sync();
+      
+      // 调试信息
+      appendDebugLog(`应用筛选完成: 隐藏了 ${hiddenRangeCount} 个连续范围, 共 ${hiddenCount} 行`);
+      appendDebugLog(`数据起始行: Excel 第 ${startRow + 1} 行, 共 ${rowCount} 行`);
+      
+      // ===== 统一可见行的行高 =====
+      // 获取所有数据行，设置统一行高（仅对可见行生效）
+      const dataRange = targetSheet.getRangeByIndexes(startRow + 1, 0, rowCount - 1, columnCount);
+      dataRange.format.rowHeight = 20; // 设置统一行高为 20 像素
       await context.sync();
       
       // 构建筛选条件设置用于显示
@@ -2324,13 +2329,19 @@ async function clearFilterFromPanel(): Promise<void> {
       }
       
       const usedRange = targetSheet.getUsedRange();
-      usedRange.load("rowCount");
+      usedRange.load("rowCount, rowIndex, columnCount");
       await context.sync();
       
-      // 显示所有行
-      for (let i = 2; i <= usedRange.rowCount; i++) {
-        const row = targetSheet.getRange(`${i}:${i}`);
-        row.rowHidden = false;
+      // 优化：一次性显示所有数据行（跳过标题行）
+      const dataRowCount = usedRange.rowCount - 1;
+      if (dataRowCount > 0) {
+        const startRowNum = usedRange.rowIndex + 2; // Excel 行号，跳过标题行
+        const endRowNum = usedRange.rowIndex + usedRange.rowCount;
+        const allDataRows = targetSheet.getRange(`${startRowNum}:${endRowNum}`);
+        allDataRows.rowHidden = false;
+        
+        // 统一行高
+        allDataRows.format.rowHeight = 20;
       }
       await context.sync();
       
@@ -2496,13 +2507,16 @@ async function resetFilterAndGoToMainReport(): Promise<void> {
       usedRange.load("rowCount, rowIndex");
       await context.sync();
       
-      // 显示所有行
-      const startRow = usedRange.rowIndex + 1;
-      const endRow = startRow + usedRange.rowCount - 1;
-      
-      for (let excelRow = startRow + 1; excelRow <= endRow; excelRow++) {
-        const row = sheet.getRange(`${excelRow}:${excelRow}`);
-        row.rowHidden = false;
+      // 优化：一次性显示所有数据行
+      const dataRowCount = usedRange.rowCount - 1;
+      if (dataRowCount > 0) {
+        const startRowNum = usedRange.rowIndex + 2; // 跳过标题行
+        const endRowNum = usedRange.rowIndex + usedRange.rowCount;
+        const allDataRows = sheet.getRange(`${startRowNum}:${endRowNum}`);
+        allDataRows.rowHidden = false;
+        
+        // 统一行高
+        allDataRows.format.rowHeight = 20;
       }
       
       // 选中第一行第一个单元格
@@ -2540,8 +2554,24 @@ async function generateReport(): Promise<void> {
   try {
     await Excel.run(async (context) => {
       const workbook = context.workbook;
-      const sourceSheet = workbook.worksheets.getActiveWorksheet();
+      
+      // 使用主报表工作表，而不是当前活动工作表
+      let sourceSheet: Excel.Worksheet;
+      let usingMainReport = false;
+      if (currentMainReportConfig && currentMainReportConfig.sheetName) {
+        sourceSheet = workbook.worksheets.getItem(currentMainReportConfig.sheetName);
+        usingMainReport = true;
+      } else {
+        sourceSheet = workbook.worksheets.getActiveWorksheet();
+      }
       sourceSheet.load("name");
+      await context.sync();
+      
+      // 调试：输出工作表信息
+      appendDebugLog(`生成报表 - 使用工作表: "${sourceSheet.name}", 是否主报表配置: ${usingMainReport}`);
+      if (currentMainReportConfig) {
+        appendDebugLog(`  主报表配置: sheetName="${currentMainReportConfig.sheetName}"`);
+      }
       
       // 检查配置是否存在
       let snColIndex: number | null = null;
@@ -2629,11 +2659,9 @@ async function generateReport(): Promise<void> {
         return;
       }
       
-      usedRange.load("rowCount, columnCount, address, values");
+      usedRange.load("rowCount, columnCount, address, values, rowIndex");
       
-      // 检查每一行是否可见（未被筛选隐藏）
-      const rows: Excel.Range[] = [];
-      // 先获取行数，但需要先 sync
+      // 先获取使用范围信息
       await context.sync();
       
       if (usedRange.rowCount === 0 || usedRange.columnCount === 0) {
@@ -2643,15 +2671,6 @@ async function generateReport(): Promise<void> {
       
       const rowCount = usedRange.rowCount;
       const columnCount = usedRange.columnCount;
-      
-      // 检查每一行是否可见（未被筛选隐藏）
-      for (let i = 1; i <= rowCount; i++) {
-        const row = sourceSheet.getRange(`${i}:${i}`);
-        row.load("rowHidden");
-        rows.push(row);
-      }
-      
-      await context.sync();
       
       // 验证数据已加载
       if (!usedRange.values || usedRange.values.length === 0) {
@@ -2669,6 +2688,24 @@ async function generateReport(): Promise<void> {
         appendDebugLog(`警告: S/N 列和金额列的索引相同！这可能导致错误。`);
       }
       
+      // ===== 直接使用 filterPanelFields 过滤数据（更快、更可靠）=====
+      // 构建筛选条件
+      const filterEntries: Array<{ colIdx: number; allowedValues: Set<string>; headerText: string }> = [];
+      for (const field of filterPanelFields) {
+        if (field.selectedValues.size < field.allValues.length && field.selectedValues.size > 0) {
+          filterEntries.push({
+            colIdx: field.columnIndex,
+            allowedValues: field.selectedValues,
+            headerText: field.headerText
+          });
+        }
+      }
+      
+      appendDebugLog(`筛选条件数量: ${filterEntries.length}`);
+      for (const filter of filterEntries) {
+        appendDebugLog(`  ${filter.headerText}: ${filter.allowedValues.size} 项`);
+      }
+      
       // 在内存中处理数据
       const filteredRows: any[][] = [];
       
@@ -2680,34 +2717,51 @@ async function generateReport(): Promise<void> {
         if (rowData.length === columnCount) {
           return rowData;
         } else if (rowData.length < columnCount) {
-          // 补充空值
           return [...rowData, ...new Array(columnCount - rowData.length).fill("")];
         } else {
-          // 截断多余的列
           return rowData.slice(0, columnCount);
         }
       };
       
-      // 第一行通常是表头，始终保留（不累加金额）
+      // 第一行是表头，始终保留
       if (usedRange.values.length > 0 && usedRange.values[0]) {
         filteredRows.push(normalizeRow(usedRange.values[0]));
       }
       
-      // 从第二行开始，只处理可见的行（rowHidden === false）
-      // rows 数组索引从 0 开始，对应第 1 行；usedRange.values 索引也从 0 开始
+      // 从第二行开始，应用筛选条件
       let visibleRowCount = 0;
-      for (let i = 1; i < rowCount && i < rows.length && i < usedRange.values.length; i++) {
-        const row = rows[i];
+      let hiddenRowCount = 0;
+      
+      for (let i = 1; i < usedRange.values.length; i++) {
+        const rowData = usedRange.values[i];
+        if (!rowData || !Array.isArray(rowData)) continue;
         
-        // 只处理可见的行（未被筛选隐藏的行）
-        if (row && !row.rowHidden) {
-          const rowData = usedRange.values[i];
-          if (rowData && Array.isArray(rowData)) {
-            filteredRows.push(normalizeRow(rowData));
-            visibleRowCount++;
+        // 检查该行是否符合所有筛选条件
+        let shouldInclude = true;
+        
+        if (filterEntries.length > 0) {
+          for (const filter of filterEntries) {
+            if (filter.colIdx < rowData.length) {
+              const cellValue = rowData[filter.colIdx];
+              const cellStr = cellValue !== null && cellValue !== undefined ? String(cellValue) : "";
+              
+              if (!filter.allowedValues.has(cellStr)) {
+                shouldInclude = false;
+                break;
+              }
+            }
           }
         }
+        
+        if (shouldInclude) {
+          filteredRows.push(normalizeRow(rowData));
+          visibleRowCount++;
+        } else {
+          hiddenRowCount++;
+        }
       }
+      
+      appendDebugLog(`总行数: ${rowCount}, 符合条件: ${visibleRowCount}, 不符合条件: ${hiddenRowCount}`);
       
       const filteredCount = filteredRows.length - 1; // 减去表头
       
@@ -2820,19 +2874,7 @@ async function generateReport(): Promise<void> {
           ).join("\n");
           appendDebugLog(`筛选条件: ${currentFilterText}`);
         } else {
-          // 如果筛选面板没有筛选条件，检查是否有行被隐藏
-          let hiddenCount = 0;
-          for (let i = 1; i < rows.length; i++) {
-            if (rows[i] && rows[i].rowHidden) {
-              hiddenCount++;
-            }
-          }
-          if (hiddenCount > 0) {
-            currentFilterText = `已筛选 (隐藏${hiddenCount}行)`;
-            appendDebugLog(`有${hiddenCount}行被隐藏`);
-          } else {
-            appendDebugLog("未检测到筛选条件");
-          }
+          appendDebugLog("未检测到筛选条件（筛选面板无筛选）");
         }
       } catch (error) {
         console.warn("获取筛选条件失败:", error);
