@@ -511,8 +511,12 @@ async function setDataRange(): Promise<void> {
 }
 
 // 设置标题行
+// 设置标题行
 async function setHeaderRow(): Promise<void> {
   try {
+    showMessage("正在设置标题行...", false);
+    appendDebugLog("开始执行 setHeaderRow");
+
     await Excel.run(async (context) => {
       const sheet = context.workbook.worksheets.getActiveWorksheet();
       sheet.load("name");
@@ -525,19 +529,37 @@ async function setHeaderRow(): Promise<void> {
 
       const rowIndex = selection.rowIndex + 1; // 转换为 1-based
 
+      // 始终用单引号包裹Sheet名，并转义内部的单引号
+      const currentSheetName = sheet.name;
+      const sheetNameEscaped = `'${currentSheetName.replace(/'/g, "''")}'`;
+      appendDebugLog(`目标Sheet: ${sheetNameEscaped}, 行: ${rowIndex}`);
+
       // 保存到 NamedItem
       const namedItems = context.workbook.names;
       try {
         const existingItem = namedItems.getItem(CFG_HEADER_ROW_NAME);
         existingItem.delete();
         await context.sync();
+        appendDebugLog(`已删除旧定义的名称: ${CFG_HEADER_ROW_NAME}`);
       } catch (error) {
-        // 如果不存在，忽略错误
+        // 忽略不存在的错误
+        if (error.code !== "ItemNotFound") {
+          appendDebugLog(`删除旧名称警告: ${error.message}`);
+        }
       }
 
-      const rowAddress = `${sheet.name}!${rowIndex}:${rowIndex}`;
-      namedItems.add(CFG_HEADER_ROW_NAME, `=${rowAddress}`);
-      await context.sync();
+      const rowAddress = `${sheetNameEscaped}!$${rowIndex}:$${rowIndex}`;
+      const formula = `=${rowAddress}`;
+      appendDebugLog(`公式: ${formula}`);
+
+      try {
+        namedItems.add(CFG_HEADER_ROW_NAME, formula);
+        await context.sync();
+      } catch (addError) {
+        const debugInfo = JSON.stringify(addError, Object.getOwnPropertyNames(addError));
+        appendDebugLog(`❌ 创建失败详情: ${debugInfo}`);
+        throw addError;
+      }
 
       // 更新配置
       if (!currentMainReportConfig) {
@@ -559,12 +581,17 @@ async function setHeaderRow(): Promise<void> {
   } catch (error) {
     console.error("设置标题行时出错:", error);
     showMessage(`设置标题行失败: ${error.message}`, true);
+    appendDebugLog(`CRITICAL: ${error.message}`);
   }
 }
 
 // 设置列配置（SN列和金额列）
+// 设置列配置（SN列和金额列）
 async function setColumnConfig(columnName: string, displayName: string): Promise<void> {
   try {
+    showMessage(`正在设置${displayName}...`, false);
+    appendDebugLog(`开始执行 setColumnConfig: ${displayName}`);
+
     await Excel.run(async (context) => {
       const sheet = context.workbook.worksheets.getActiveWorksheet();
       sheet.load("name");
@@ -590,23 +617,41 @@ async function setColumnConfig(columnName: string, displayName: string): Promise
 
       // 先尝试删除已存在的（如果存在）
       try {
-        const existingItem = namedItems.getItemOrNullObject(columnName);
+        // 使用 getItem 而不是 getItemOrNullObject
+        // 注意：这里需要 fetch 确保存在性检查正确
+        /* 
+           FIX: getItemOrNullObject 在某些 Excel 版本可能不稳定，
+           但 try-catch getItem 是最通用的。
+           这里保持和 setDataRange 一致的 try-catch 模式。
+        */
+        const existingItem = namedItems.getItem(columnName);
+        existingItem.delete();
         await context.sync();
-        if (!existingItem.isNullObject) {
-          existingItem.delete();
-          await context.sync();
-        }
+        appendDebugLog(`已删除旧定义的列名称: ${columnName}`);
       } catch (error) {
-        // 如果删除失败，忽略错误
-        console.log("删除已有 NamedItem 时出错（可能不存在）:", error);
+        if (error.code !== "ItemNotFound") {
+          appendDebugLog(`删除旧列名称警告: ${error.message}`);
+        }
       }
+
+      // 始终用单引号包裹Sheet名，并转义内部的单引号
+      const currentSheetName = sheet.name;
+      const sheetNameEscaped = `'${currentSheetName.replace(/'/g, "''")}'`;
 
       // 创建新的 NamedItem，引用到选中的单元格所在列的第一个单元格
       // 使用单元格引用而不是整列引用，避免某些 Excel 版本的兼容问题
-      const cellAddress = `='${sheet.name}'!$${columnNameStr}$1`;
-      namedItems.add(columnName, cellAddress);
+      // 公式: ='Sheet Name'!$A$1
+      const cellAddress = `=${sheetNameEscaped}!$${columnNameStr}$1`;
+      appendDebugLog(`创建NamedItem: ${columnName}, 公式: ${cellAddress}`);
 
-      await context.sync();
+      try {
+        namedItems.add(columnName, cellAddress);
+        await context.sync();
+      } catch (addError) {
+        const debugInfo = JSON.stringify(addError, Object.getOwnPropertyNames(addError));
+        appendDebugLog(`❌ 列配置创建失败: ${debugInfo}`);
+        throw addError;
+      }
 
       // 更新配置
       if (!currentMainReportConfig) {
@@ -634,6 +679,7 @@ async function setColumnConfig(columnName: string, displayName: string): Promise
   } catch (error) {
     console.error("设置列配置时出错:", error);
     showMessage(`设置${displayName}失败: ${error.message}`, true);
+    appendDebugLog(`CRITICAL: ${error.message}`);
   }
 }
 
